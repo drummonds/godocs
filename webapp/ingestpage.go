@@ -73,7 +73,7 @@ func (i *IngestPage) onIngestClick(ctx app.Context, e app.Event) {
 // runIngest calls the API to trigger ingestion
 func (i *IngestPage) runIngest(ctx app.Context) {
 	ctx.Async(func() {
-		res := app.Window().Call("fetch", "/api/ingest", map[string]interface{}{
+		res := app.Window().Call("fetch", BuildAPIURL("/api/ingest"), map[string]interface{}{
 			"method": "POST",
 		})
 

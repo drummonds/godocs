@@ -1,0 +1,477 @@
+# Example OpenAPI Specification for goEDMS
+# This is a starter template - can be manually maintained or generated via swag
+
+openapi: 3.0.3
+info:
+  title: goEDMS API
+  description: |
+    Electronic Document Management System API
+
+    Provides endpoints for document management, search, and administration.
+
+    ## Features
+    - Document upload and management
+    - Full-text search with PostgreSQL
+    - OCR processing for scanned documents
+    - Word cloud analytics
+    - Automatic document ingestion
+
+    ## Architecture
+    - Backend: Go with Echo framework
+    - Frontend: WebAssembly (WASM)
+    - Database: PostgreSQL
+    - OCR: Tesseract
+  version: 1.0.0
+  contact:
+    name: goEDMS Team
+    url: https://github.com/drummonds/goEDMS
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Combined mode (frontend + backend)
+  - url: http://localhost:8000
+    description: Backend-only mode
+  - url: http://localhost:3000
+    description: Frontend-only mode (proxies to backend)
+
+tags:
+  - name: documents
+    description: Document management operations
+  - name: search
+    description: Full-text search operations
+  - name: folders
+    description: Folder management
+  - name: admin
+    description: Administrative operations
+  - name: wordcloud
+    description: Word frequency analytics
+  - name: health
+    description: Health and status checks
+
+paths:
+  /api/health:
+    get:
+      summary: Health check
+      description: Returns the health status of the backend API
+      tags:
+        - health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: goEDMS Backend API
+
+  /api/documents/latest:
+    get:
+      summary: Get latest documents
+      description: Retrieve a paginated list of recently ingested documents
+      tags:
+        - documents
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          required: false
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/documents/filesystem:
+    get:
+      summary: Get document filesystem
+      description: Returns the complete file tree of all documents
+      tags:
+        - documents
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileSystem'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/document/{id}:
+    get:
+      summary: Get document by ID
+      description: Retrieve a specific document by its ULID
+      tags:
+        - documents
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Document ULID
+          schema:
+            type: string
+            example: 01ARZ3NDEKTSV4RRFFQ69G5FAV
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Document'
+        '404':
+          description: Document not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/search:
+    get:
+      summary: Search documents
+      description: Perform full-text search across all documents using PostgreSQL
+      tags:
+        - search
+      parameters:
+        - name: term
+          in: query
+          required: true
+          description: Search term or phrase
+          schema:
+            type: string
+            example: invoice
+      responses:
+        '200':
+          description: Search results found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileSystem'
+        '204':
+          description: No results found
+        '404':
+          description: Empty search term
+          content:
+            application/json:
+              schema:
+                type: string
+        '500':
+          description: Search failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/search/reindex:
+    post:
+      summary: Reindex search documents
+      description: Rebuild the full-text search index for all documents
+      tags:
+        - search
+      responses:
+        '200':
+          description: Reindex completed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Search reindex completed successfully
+                  documents_reindexed:
+                    type: integer
+                    example: 1523
+        '500':
+          description: Reindex failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/folder/{folder}:
+    get:
+      summary: Get folder contents
+      description: Retrieve all documents in a specific folder
+      tags:
+        - folders
+      parameters:
+        - name: folder
+          in: path
+          required: true
+          description: Folder path
+          schema:
+            type: string
+            example: /documents/2024
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Document'
+
+  /api/ingest:
+    post:
+      summary: Trigger document ingestion
+      description: Manually trigger the document ingestion process
+      tags:
+        - admin
+      responses:
+        '200':
+          description: Ingestion started
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Ingestion started
+
+  /api/clean:
+    post:
+      summary: Clean database
+      description: Remove orphaned database entries and move orphaned files
+      tags:
+        - admin
+      responses:
+        '200':
+          description: Cleanup completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Cleanup completed successfully
+                  scanned:
+                    type: integer
+                    example: 1000
+                  deleted:
+                    type: integer
+                    example: 5
+                  moved:
+                    type: integer
+                    example: 2
+        '500':
+          description: Cleanup failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/about:
+    get:
+      summary: Get system information
+      description: Retrieve information about the goEDMS installation
+      tags:
+        - admin
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AboutInfo'
+
+  /api/wordcloud:
+    get:
+      summary: Get word cloud data
+      description: Retrieve word frequency data for generating word clouds
+      tags:
+        - wordcloud
+      parameters:
+        - name: limit
+          in: query
+          description: Maximum number of words to return
+          required: false
+          schema:
+            type: integer
+            default: 100
+            minimum: 1
+            maximum: 1000
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WordCloudResponse'
+        '400':
+          description: Invalid limit parameter
+        '500':
+          description: Failed to retrieve word cloud
+
+  /api/wordcloud/recalculate:
+    post:
+      summary: Recalculate word cloud
+      description: Trigger a full recalculation of word frequencies
+      tags:
+        - wordcloud
+      responses:
+        '200':
+          description: Recalculation started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Word cloud recalculation started
+                  status:
+                    type: string
+                    example: processing
+
+components:
+  schemas:
+    Document:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 42
+        name:
+          type: string
+          example: invoice-2024-01.pdf
+        path:
+          type: string
+          example: /documents/2024/invoice-2024-01.pdf
+        ingress_time:
+          type: string
+          format: date-time
+          example: 2024-10-26T10:30:00Z
+        folder:
+          type: string
+          example: /documents/2024
+        hash:
+          type: string
+          example: a3f5c8d9e7b2f1a0
+        ulid:
+          type: string
+          example: 01ARZ3NDEKTSV4RRFFQ69G5FAV
+        document_type:
+          type: string
+          example: .pdf
+        full_text:
+          type: string
+          description: Extracted text content
+        url:
+          type: string
+          example: /document/view/01ARZ3NDEKTSV4RRFFQ69G5FAV
+
+    FileSystem:
+      type: object
+      properties:
+        fileSystem:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileTreeNode'
+
+    FileTreeNode:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        children:
+          type: array
+          items:
+            $ref: '#/components/schemas/FileTreeNode'
+        droppable:
+          type: boolean
+        parent:
+          type: string
+        fileURL:
+          type: string
+
+    WordCloudResponse:
+      type: object
+      properties:
+        words:
+          type: array
+          items:
+            $ref: '#/components/schemas/WordFrequency'
+        metadata:
+          $ref: '#/components/schemas/WordCloudMetadata'
+        count:
+          type: integer
+          example: 100
+
+    WordFrequency:
+      type: object
+      properties:
+        word:
+          type: string
+          example: document
+        frequency:
+          type: integer
+          example: 245
+
+    WordCloudMetadata:
+      type: object
+      properties:
+        lastCalculation:
+          type: string
+          format: date-time
+        totalDocsProcessed:
+          type: integer
+          example: 1523
+        totalWordsIndexed:
+          type: integer
+          example: 15042
+        version:
+          type: integer
+          example: 1
+
+    AboutInfo:
+      type: object
+      properties:
+        version:
+          type: string
+          example: v1.0.0
+        databaseType:
+          type: string
+          example: PostgreSQL
+        ocrEnabled:
+          type: boolean
+          example: true
+        ocrPath:
+          type: string
+          example: /usr/bin/tesseract
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string

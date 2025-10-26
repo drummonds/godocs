@@ -107,7 +107,7 @@ func (c *CleanPage) onCleanClick(ctx app.Context, e app.Event) {
 // runClean calls the API to trigger database cleaning
 func (c *CleanPage) runClean(ctx app.Context) {
 	ctx.Async(func() {
-		res := app.Window().Call("fetch", "/api/clean", map[string]interface{}{
+		res := app.Window().Call("fetch", BuildAPIURL("/api/clean"), map[string]interface{}{
 			"method": "POST",
 		})
 

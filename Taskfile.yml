@@ -45,7 +45,7 @@ tasks:
   # Build tasks
   build:
     desc: Build the application
-    deps: [build:wasm]
+    deps: [build:wasm, openapi]
     cmds:
       - echo "Building backend..."
       - mkdir -p {{.BUILD_DIR}}
@@ -122,6 +122,15 @@ tasks:
     desc: Run go vet
     cmds:
       - go vet ./...
+
+  # Documentation tasks
+  openapi:
+    desc: Generate OpenAPI specification from source code
+    cmds:
+      - echo "Generating OpenAPI spec from source annotations..."
+      - swag init -g cmd/backend/main.go -o ./docs --parseDependency --parseInternal
+      - cp docs/swagger.yaml docs/openapi.yaml
+      - echo "OpenAPI spec generated at docs/openapi.yaml and docs/swagger.yaml"
 
   # Docker tasks
   docker:build:

@@ -59,9 +59,13 @@ func SetupPostgresDatabase(connectionString string) (*PostgresDB, error) {
 	Logger.Info("Connected to PostgreSQL database successfully")
 
 	// Run migrations
+	Logger.Info("Running database migrations...")
 	if err := runPostgresMigrations(db); err != nil {
+		Logger.Error("Failed to run database migrations", "error", err)
+		Logger.Error("Database may be in an inconsistent state. Try running: ./fix-search.sh")
 		return nil, fmt.Errorf("failed to run migrations: %w", err)
 	}
+	Logger.Info("Database migrations completed successfully")
 
 	return &PostgresDB{
 		db:         db,

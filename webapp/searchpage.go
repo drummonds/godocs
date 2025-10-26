@@ -97,7 +97,7 @@ func (s *SearchPage) performSearch(ctx app.Context) {
 
 	ctx.Async(func() {
 		encodedTerm := url.QueryEscape(s.searchTerm)
-		searchURL := fmt.Sprintf("/api/search?term=%s", encodedTerm)
+		searchURL := BuildAPIURL(fmt.Sprintf("/api/search?term=%s", encodedTerm))
 
 		res := app.Window().Call("fetch", searchURL)
 

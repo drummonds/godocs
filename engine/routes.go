@@ -70,6 +70,17 @@ func (serverHandler *ServerHandler) AddDocumentViewRoutes() error {
 }
 
 // DeleteFile deletes a folder or file from the database (and all children if folder) (and on disc and from bleve search if document)
+// @Summary Delete a file or folder
+// @Description Deletes a document or folder from the system, including database entry and physical file
+// @Tags Documents
+// @Accept json
+// @Produce json
+// @Param id query string false "Document ULID"
+// @Param path query string false "File path relative to document root"
+// @Success 200 {string} string "Document Deleted" or "Folder Deleted"
+// @Failure 404 {object} map[string]interface{} "File not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /document [delete]
 func (serverHandler *ServerHandler) DeleteFile(context echo.Context) error {
 	var err error
 	params := context.QueryParams()
@@ -118,6 +129,17 @@ func (serverHandler *ServerHandler) DeleteFile(context echo.Context) error {
 }
 
 // UploadDocuments handles documents uploaded from the frontend
+// @Summary Upload a document
+// @Description Upload a new document file to the ingress folder for processing
+// @Tags Documents
+// @Accept multipart/form-data
+// @Produce json
+// @Param path formData string false "Upload path (relative to ingress folder)"
+// @Param file formData file true "Document file to upload"
+// @Success 200 {string} string "Path to uploaded file"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /document/upload [post]
 func (serverHandler *ServerHandler) UploadDocuments(context echo.Context) error {
 	request := context.Request()
 	uploadPath := request.FormValue("path")
@@ -151,6 +173,17 @@ func (serverHandler *ServerHandler) UploadDocuments(context echo.Context) error 
 }
 
 // MoveDocuments will accept an API call from the frontend to move a document or documents
+// @Summary Move documents to a new folder
+// @Description Move one or more documents to a different folder in the document tree
+// @Tags Documents
+// @Accept json
+// @Produce json
+// @Param folder query string true "Target folder path"
+// @Param id query []string true "Document ULID(s) to move"
+// @Success 200 {string} string "Ok"
+// @Failure 400 {object} map[string]interface{} "Bad request"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /document/move [patch]
 func (serverHandler *ServerHandler) MoveDocuments(context echo.Context) error {
 	var docIDs url.Values
 	var newFolder string
@@ -175,6 +208,17 @@ func (serverHandler *ServerHandler) MoveDocuments(context echo.Context) error {
 }
 
 // SearchDocuments will take the search terms and search all documents using PostgreSQL full-text search
+// @Summary Search documents
+// @Description Search all documents using PostgreSQL full-text search
+// @Tags Search
+// @Accept json
+// @Produce json
+// @Param term query string true "Search term"
+// @Success 200 {array} fileTreeStruct "Search results"
+// @Success 204 "No results found"
+// @Failure 404 {string} string "Empty search term"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /search [get]
 func (serverHandler *ServerHandler) SearchDocuments(context echo.Context) error {
 	searchParams := context.QueryParams()
 	searchTerm := searchParams.Get("term")
@@ -203,6 +247,14 @@ func (serverHandler *ServerHandler) SearchDocuments(context echo.Context) error 
 }
 
 // ReindexSearchDocuments reindexes all documents for full-text search
+// @Summary Reindex search documents
+// @Description Rebuild the full-text search index for all documents
+// @Tags Search
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Reindex successful"
+// @Failure 500 {object} map[string]interface{} "Reindex failed"
+// @Router /search/reindex [post]
 func (serverHandler *ServerHandler) ReindexSearchDocuments(context echo.Context) error {
 	Logger.Info("Search reindex triggered via API")
 
@@ -223,6 +275,16 @@ func (serverHandler *ServerHandler) ReindexSearchDocuments(context echo.Context)
 }
 
 // GetDocument will return a document by ULID
+// @Summary Get a document by ID
+// @Description Retrieve document details by ULID
+// @Tags Documents
+// @Accept json
+// @Produce json
+// @Param id path string true "Document ULID"
+// @Success 200 {object} database.Document "Document details"
+// @Failure 404 {object} map[string]interface{} "Document not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /document/{id} [get]
 func (serverHandler *ServerHandler) GetDocument(context echo.Context) error {
 	ulidStr := context.Param("id")
 	document, httpStatus, err := database.FetchDocument(ulidStr, serverHandler.DB)
@@ -235,6 +297,14 @@ func (serverHandler *ServerHandler) GetDocument(context echo.Context) error {
 }
 
 // GetDocumentFileSystem will scan the document folder and get the complete tree to send to the frontend
+// @Summary Get document filesystem tree
+// @Description Retrieve the complete document folder structure as a tree
+// @Tags Documents
+// @Accept json
+// @Produce json
+// @Success 200 {object} fullFileSystem "Complete filesystem tree"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /documents/filesystem [get]
 func (serverHandler *ServerHandler) GetDocumentFileSystem(context echo.Context) error {
 	fileSystem, err := fileTree(serverHandler.ServerConfig.DocumentPath, serverHandler.DB)
 	if err != nil {
@@ -367,6 +437,15 @@ func getChildrenIDs(rootPath string) (*[]string, error) {
 }
 
 // GetLatestDocuments gets the latest documents that were ingressed
+// @Summary Get latest documents
+// @Description Retrieve the most recently ingested documents with pagination
+// @Tags Documents
+// @Accept json
+// @Produce json
+// @Param page query int false "Page number (default: 1)"
+// @Success 200 {object} map[string]interface{} "Paginated documents with metadata"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /documents/latest [get]
 func (serverHandler *ServerHandler) GetLatestDocuments(context echo.Context) error {
 	// Get page parameter (default to 1)
 	page := 1
@@ -403,6 +482,15 @@ func (serverHandler *ServerHandler) GetLatestDocuments(context echo.Context) err
 }
 
 // GetFolder fetches all the documents in the folder
+// @Summary Get folder contents
+// @Description Retrieve all documents in a specific folder
+// @Tags Folders
+// @Accept json
+// @Produce json
+// @Param folder path string true "Folder name"
+// @Success 200 {array} database.Document "List of documents in folder"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /folder/{folder} [get]
 func (serverHandler *ServerHandler) GetFolder(context echo.Context) error {
 	folderName := context.Param("folder")
 
@@ -416,6 +504,16 @@ func (serverHandler *ServerHandler) GetFolder(context echo.Context) error {
 }
 
 // CreateFolder creates a folder in the document tree
+// @Summary Create a new folder
+// @Description Create a new folder in the document filesystem
+// @Tags Folders
+// @Accept json
+// @Produce json
+// @Param folder query string true "Folder name"
+// @Param path query string true "Parent path"
+// @Success 200 {string} string "Full folder path created"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /folder [post]
 func (serverHandler *ServerHandler) CreateFolder(context echo.Context) error {
 	params := context.QueryParams()
 	folderName := params.Get("folder")
@@ -522,6 +620,13 @@ func (serverHandler *ServerHandler) CreateFolder(context echo.Context) error {
 } */
 
 // GetAboutInfo returns information about the application configuration
+// @Summary Get application information
+// @Description Retrieve information about the application configuration, version, and database
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Application information"
+// @Router /about [get]
 func (serverHandler *ServerHandler) GetAboutInfo(c echo.Context) error {
 	// Get git commit hash
 	gitVersion := "f9d84497" // This should be set at build time via ldflags
@@ -595,6 +700,13 @@ func (serverHandler *ServerHandler) GetAboutInfo(c echo.Context) error {
 }
 
 // RunIngestNow triggers the ingestion process manually
+// @Summary Trigger document ingestion
+// @Description Manually trigger the document ingestion process to process files in the ingress folder
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Success 200 {string} string "Ingestion started"
+// @Router /ingest [post]
 func (serverHandler *ServerHandler) RunIngestNow(c echo.Context) error {
 	Logger.Info("Manual ingestion triggered via API")
 
@@ -617,6 +729,14 @@ func (serverHandler *ServerHandler) RunIngestNow(c echo.Context) error {
 
 // CleanDatabase checks all documents and removes entries for missing files,
 // and moves orphaned files (not in database) back to ingress for reprocessing
+// @Summary Clean database
+// @Description Remove database entries for missing files and move orphaned files to ingress
+// @Tags Admin
+// @Accept json
+// @Produce json
+// @Success 200 {object} map[string]interface{} "Cleanup statistics"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /clean [post]
 func (serverHandler *ServerHandler) CleanDatabase(c echo.Context) error {
 	Logger.Info("Database cleanup triggered via API")
 

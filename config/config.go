@@ -241,6 +241,29 @@ func SetupServer() (ServerConfig, *slog.Logger) {
 	return serverConfigLive, logger
 }
 
+// SetupFrontend loads configuration for frontend-only server
+func SetupFrontend() (FrontEndConfig, *slog.Logger) {
+	// Load .env file (silently ignore if doesn't exist)
+	_ = godotenv.Load(".env")
+	_ = godotenv.Load("config.env")
+	_ = godotenv.Load("frontend.env")
+
+	logger := setupLogging()
+	Logger = logger
+
+	frontendConfig := FrontEndConfig{}
+
+	// Frontend configuration
+	frontendConfig.NewDocumentNumber = getEnvInt("NEW_DOCUMENT_COUNT", 5)
+	frontendConfig.ServerAPIURL = getEnv("SERVER_API_URL", "http://localhost:8000")
+
+	logger.Info("Frontend configuration loaded",
+		"apiURL", frontendConfig.ServerAPIURL,
+		"newDocumentCount", frontendConfig.NewDocumentNumber)
+
+	return frontendConfig, logger
+}
+
 // setupLogging configures the application logger
 func setupLogging() *slog.Logger {
 	logLevel := getEnv("LOG_LEVEL", "debug")

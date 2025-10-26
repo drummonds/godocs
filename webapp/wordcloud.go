@@ -237,7 +237,7 @@ func (w *WordCloudPage) loadWordCloud(ctx app.Context) {
 	w.error = ""
 
 	ctx.Async(func() {
-		res := app.Window().Call("fetch", "/api/wordcloud?limit=100")
+		res := app.Window().Call("fetch", BuildAPIURL("/api/wordcloud?limit=100"))
 
 		res.Call("then", app.FuncOf(func(this app.Value, args []app.Value) any {
 			if len(args) == 0 {
@@ -294,7 +294,7 @@ func (w *WordCloudPage) loadWordCloud(ctx app.Context) {
 // recalculateWordCloud triggers a full recalculation of the word cloud
 func (w *WordCloudPage) recalculateWordCloud(ctx app.Context) {
 	ctx.Async(func() {
-		res := app.Window().Call("fetch", "/api/wordcloud/recalculate", map[string]interface{}{
+		res := app.Window().Call("fetch", BuildAPIURL("/api/wordcloud/recalculate"), map[string]interface{}{
 			"method": "POST",
 		})
 

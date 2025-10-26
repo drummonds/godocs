@@ -141,6 +141,20 @@ func main() {
 	e.File("/webapp/wordcloud.css", "webapp/wordcloud.css")
 	e.File("/favicon.ico", "public/built/favicon.ico")
 
+	// Inject backend API URL into the page
+	e.GET("/config.js", func(c echo.Context) error {
+		configJS := fmt.Sprintf(`
+// goEDMS Frontend Configuration
+window.goEDMSConfig = {
+    apiURL: "%s",
+    newDocumentCount: %d
+};
+console.log("goEDMS Config loaded:", window.goEDMSConfig);
+`, serverConfig.ServerAPIURL, serverConfig.NewDocumentNumber)
+		c.Response().Header().Set("Content-Type", "application/javascript")
+		return c.String(http.StatusOK, configJS)
+	})
+
 	Logger.Info("Logger enabled!!")
 
 	//injecting database into the context so we can access it

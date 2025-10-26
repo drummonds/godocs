@@ -36,7 +36,7 @@ func (a *AboutPage) OnMount(ctx app.Context) {
 // fetchAboutInfo fetches the about information from the API
 func (a *AboutPage) fetchAboutInfo(ctx app.Context) {
 	ctx.Async(func() {
-		res := app.Window().Call("fetch", "/api/about")
+		res := app.Window().Call("fetch", BuildAPIURL("/api/about"))
 
 		res.Call("then", app.FuncOf(func(this app.Value, args []app.Value) any {
 			if len(args) == 0 {

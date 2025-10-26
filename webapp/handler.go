@@ -32,6 +32,9 @@ func Handler() http.Handler {
 			"/webapp/webapp.css",
 			"/webapp/wordcloud.css",
 		},
+		Scripts: []string{
+			"/config.js", // Load backend API configuration
+		},
 		RawHeaders: []string{
 			`<meta name="viewport" content="width=device-width, initial-scale=1">`,
 		},
