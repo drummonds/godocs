@@ -105,17 +105,22 @@ func TestSearchEndpoint(t *testing.T) {
 			t.Errorf("Expected status 200, got %d: %s", rec.Code, rec.Body.String())
 		}
 
-		var results []interface{}
-		if err := json.Unmarshal(rec.Body.Bytes(), &results); err != nil {
+		var response map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 			t.Fatalf("Failed to parse search results: %v\nBody: %s", err, rec.Body.String())
 		}
 
-		// Should find at least the 2 invoice documents
-		if len(results) < 2 {
-			t.Errorf("Expected at least 2 results for 'invoice', got %d", len(results))
+		fileSystem, ok := response["fileSystem"].([]interface{})
+		if !ok {
+			t.Fatalf("Expected fileSystem array in response, got %T", response["fileSystem"])
 		}
 
-		t.Logf("Search for 'invoice' returned %d results", len(results))
+		// Should find at least the 2 invoice documents (plus SearchResults root)
+		if len(fileSystem) < 3 {
+			t.Errorf("Expected at least 3 results for 'invoice' (including root), got %d", len(fileSystem))
+		}
+
+		t.Logf("Search for 'invoice' returned %d results", len(fileSystem))
 	})
 
 	t.Run("Search with valid term - phrase search", func(t *testing.T) {
@@ -129,12 +134,15 @@ func TestSearchEndpoint(t *testing.T) {
 		}
 
 		if rec.Code == http.StatusOK {
-			var results []interface{}
-			if err := json.Unmarshal(rec.Body.Bytes(), &results); err != nil {
+			var response map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 				t.Fatalf("Failed to parse search results: %v", err)
 			}
 
-			t.Logf("Phrase search returned %d results", len(results))
+			fileSystem, ok := response["fileSystem"].([]interface{})
+			if ok {
+				t.Logf("Phrase search returned %d results", len(fileSystem))
+			}
 		}
 	})
 
@@ -148,14 +156,19 @@ func TestSearchEndpoint(t *testing.T) {
 		}
 
 		if rec.Code == http.StatusOK {
-			var results []interface{}
-			if err := json.Unmarshal(rec.Body.Bytes(), &results); err != nil {
+			var response map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 				t.Fatalf("Failed to parse search results: %v", err)
 			}
 
-			// Should find the tax document
-			if len(results) == 0 {
-				t.Error("Expected at least 1 result for 'tax', got 0")
+			fileSystem, ok := response["fileSystem"].([]interface{})
+			if !ok {
+				t.Fatalf("Expected fileSystem array in response")
+			}
+
+			// Should find the tax document (plus SearchResults root)
+			if len(fileSystem) < 2 {
+				t.Errorf("Expected at least 2 results for 'tax' (including root), got %d", len(fileSystem))
 			}
 		}
 	})
@@ -210,12 +223,15 @@ func TestSearchEndpoint(t *testing.T) {
 		}
 
 		if rec.Code == http.StatusOK {
-			var results []interface{}
-			if err := json.Unmarshal(rec.Body.Bytes(), &results); err != nil {
+			var response map[string]interface{}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 				t.Fatalf("Failed to parse search results: %v", err)
 			}
 
-			t.Logf("URL encoded search returned %d results", len(results))
+			fileSystem, ok := response["fileSystem"].([]interface{})
+			if ok {
+				t.Logf("URL encoded search returned %d results", len(fileSystem))
+			}
 		}
 	})
 
@@ -239,9 +255,22 @@ func TestSearchEndpoint(t *testing.T) {
 			t.Skip("No results to validate")
 		}
 
+		var response map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to parse search response: %v", err)
+		}
+
+		fileSystem, ok := response["fileSystem"].([]interface{})
+		if !ok || len(fileSystem) == 0 {
+			t.Skip("No results returned")
+		}
+
+		// Convert to map for easier access
 		var results []map[string]interface{}
-		if err := json.Unmarshal(rec.Body.Bytes(), &results); err != nil {
-			t.Fatalf("Failed to parse search results: %v", err)
+		for _, item := range fileSystem {
+			if m, ok := item.(map[string]interface{}); ok {
+				results = append(results, m)
+			}
 		}
 
 		if len(results) == 0 {
@@ -271,9 +300,11 @@ func TestSearchEndpoint(t *testing.T) {
 			e.ServeHTTP(rec, req)
 
 			if rec.Code == http.StatusOK {
-				var results []interface{}
-				if err := json.Unmarshal(rec.Body.Bytes(), &results); err == nil {
-					resultCounts = append(resultCounts, len(results))
+				var response map[string]interface{}
+				if err := json.Unmarshal(rec.Body.Bytes(), &response); err == nil {
+					if fileSystem, ok := response["fileSystem"].([]interface{}); ok {
+						resultCounts = append(resultCounts, len(fileSystem))
+					}
 				}
 			} else if rec.Code == http.StatusNoContent {
 				resultCounts = append(resultCounts, 0)
@@ -471,13 +502,27 @@ func TestSearchResultFormat(t *testing.T) {
 			t.Skip("No results to validate")
 		}
 
-		var results []map[string]interface{}
-		if err := json.Unmarshal(rec.Body.Bytes(), &results); err != nil {
-			t.Fatalf("Failed to parse results: %v", err)
+		var response map[string]interface{}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatalf("Failed to parse response: %v", err)
 		}
 
-		if len(results) == 0 {
+		// Verify response has fileSystem field
+		fileSystem, ok := response["fileSystem"].([]interface{})
+		if !ok {
+			t.Fatalf("Response missing fileSystem array")
+		}
+
+		if len(fileSystem) == 0 {
 			t.Skip("No results returned")
+		}
+
+		// Convert to map slice for easier access
+		var results []map[string]interface{}
+		for _, item := range fileSystem {
+			if m, ok := item.(map[string]interface{}); ok {
+				results = append(results, m)
+			}
 		}
 
 		// Verify array structure

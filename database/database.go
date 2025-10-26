@@ -58,6 +58,16 @@ type DBInterface interface {
 	GetWordCloudMetadata() (*WordCloudMetadata, error)
 	RecalculateAllWordFrequencies() error
 	UpdateWordFrequencies(docID string) error
+	// Job tracking methods
+	CreateJob(jobType JobType, message string) (*Job, error)
+	UpdateJobProgress(jobID ulid.ULID, progress int, currentStep string) error
+	UpdateJobStatus(jobID ulid.ULID, status JobStatus, message string) error
+	UpdateJobError(jobID ulid.ULID, errorMsg string) error
+	CompleteJob(jobID ulid.ULID, result string) error
+	GetJob(jobID ulid.ULID) (*Job, error)
+	GetRecentJobs(limit, offset int) ([]Job, error)
+	GetActiveJobs() ([]Job, error)
+	DeleteOldJobs(olderThan time.Duration) (int, error)
 }
 
 // SetupDatabase initializes the database based on configuration

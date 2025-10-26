@@ -25,12 +25,74 @@ definitions:
         description: Have a smaller (than hash) id that can be used in URL's, hopefully
           speed things up
         items:
-          format: int32
           type: integer
         type: array
       url:
         type: string
     type: object
+  database.Job:
+    properties:
+      completedAt:
+        type: string
+      createdAt:
+        type: string
+      currentStep:
+        description: Human-readable current step
+        type: string
+      error:
+        description: Error message if failed
+        type: string
+      id:
+        items:
+          type: integer
+        type: array
+      message:
+        description: Status message
+        type: string
+      progress:
+        description: 0-100
+        type: integer
+      result:
+        description: JSON result data
+        type: string
+      startedAt:
+        type: string
+      status:
+        $ref: '#/definitions/database.JobStatus'
+      totalSteps:
+        description: Total number of steps
+        type: integer
+      type:
+        $ref: '#/definitions/database.JobType'
+      updatedAt:
+        type: string
+    type: object
+  database.JobStatus:
+    enum:
+    - pending
+    - running
+    - completed
+    - failed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - JobStatusPending
+    - JobStatusRunning
+    - JobStatusCompleted
+    - JobStatusFailed
+    - JobStatusCancelled
+  database.JobType:
+    enum:
+    - ingestion
+    - cleanup
+    - wordcloud
+    - search_reindex
+    type: string
+    x-enum-varnames:
+    - JobTypeIngestion
+    - JobTypeCleanup
+    - JobTypeWordCloud
+    - JobTypeSearchReindex
   engine.fileTreeStruct:
     properties:
       childrenIDs:
@@ -108,7 +170,7 @@ paths:
       - application/json
       responses:
         "200":
-          description: Cleanup statistics
+          description: Job created with jobId
           schema:
             additionalProperties: true
             type: object
@@ -376,12 +438,97 @@ paths:
       - application/json
       responses:
         "200":
-          description: Ingestion started
+          description: Job created with job ID
           schema:
-            type: string
+            additionalProperties: true
+            type: object
       summary: Trigger document ingestion
       tags:
       - Admin
+  /jobs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of recent jobs with pagination
+      parameters:
+      - description: 'Number of jobs to return (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Offset for pagination (default: 0)'
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of jobs
+          schema:
+            items:
+              $ref: '#/definitions/database.Job'
+            type: array
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get recent jobs
+      tags:
+      - Jobs
+  /jobs/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve details of a specific job by its ID
+      parameters:
+      - description: Job ID (ULID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Job details
+          schema:
+            $ref: '#/definitions/database.Job'
+        "400":
+          description: Invalid job ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Job not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get job by ID
+      tags:
+      - Jobs
+  /jobs/active:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all jobs that are currently running or pending
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of active jobs
+          schema:
+            items:
+              $ref: '#/definitions/database.Job'
+            type: array
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get active jobs
+      tags:
+      - Jobs
   /search:
     get:
       consumes:
@@ -399,9 +546,7 @@ paths:
         "200":
           description: Search results
           schema:
-            items:
-              $ref: '#/definitions/engine.fileTreeStruct'
-            type: array
+            $ref: '#/definitions/engine.fullFileSystem'
         "204":
           description: No results found
         "404":

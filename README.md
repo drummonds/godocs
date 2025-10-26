@@ -148,6 +148,31 @@ All configuration options can be set via environment variables using the prefix 
 
 See `.env.example` for a complete list of available variables.
 
+## Architecture
+
+### Document Ingestion Flow
+
+goEDMS processes documents through a comprehensive ingestion pipeline:
+
+![Document Ingestion Flow](docs/ingestion-flow.svg)
+
+**Key Features:**
+- **Multiple Sources**: Documents can be added via scheduled ingress folder scans or direct web uploads
+- **Format Support**: PDF, images (TIFF, JPG, PNG), text files (TXT, RTF), and Word documents
+- **Intelligent Processing**:
+  - PDF text extraction with automatic fallback to OCR for scanned documents
+  - Image-to-text conversion using Tesseract OCR
+  - Multi-page PDF handling with page stitching
+- **Deduplication**: SHA256 hash-based duplicate detection
+- **Full-Text Search**: Automatic indexing in PostgreSQL using tsvector for fast full-text search
+- **Word Cloud**: Automatic word frequency analysis for document visualization
+- **Storage**: Secure file system storage with database metadata tracking
+
+For more details, see:
+- [Ingestion Flow Diagram Source](docs/ingestion-flow.d2) - D2 diagram source
+- [Architecture Documentation](docs/ARCHITECTURE.md) - Frontend/Backend separation details
+- [OpenAPI Specification](docs/openapi.yaml) - Complete API documentation
+
 ## Documentation
 
 [Documentation](https://deranjer.github.io/goEDMSDocs)

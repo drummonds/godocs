@@ -59,7 +59,7 @@
                 "summary": "Clean database",
                 "responses": {
                     "200": {
-                        "description": "Cleanup statistics",
+                        "description": "Job created with jobId",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -453,9 +453,136 @@
                 "summary": "Trigger document ingestion",
                 "responses": {
                     "200": {
-                        "description": "Ingestion started",
+                        "description": "Job created with job ID",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs": {
+            "get": {
+                "description": "Retrieve a list of recent jobs with pagination",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Get recent jobs",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Number of jobs to return (default: 20)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Offset for pagination (default: 0)",
+                        "name": "offset",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "List of jobs",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/database.Job"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/active": {
+            "get": {
+                "description": "Retrieve all jobs that are currently running or pending",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Get active jobs",
+                "responses": {
+                    "200": {
+                        "description": "List of active jobs",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/database.Job"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/jobs/{id}": {
+            "get": {
+                "description": "Retrieve details of a specific job by its ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Get job by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Job ID (ULID)",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Job details",
+                        "schema": {
+                            "$ref": "#/definitions/database.Job"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid job ID",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Job not found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     }
                 }
@@ -487,10 +614,7 @@
                     "200": {
                         "description": "Search results",
                         "schema": {
-                            "type": "array",
-                            "items": {
-                                "$ref": "#/definitions/engine.fileTreeStruct"
-                            }
+                            "$ref": "#/definitions/engine.fullFileSystem"
                         }
                     },
                     "204": {
@@ -642,14 +766,98 @@
                     "description": "Have a smaller (than hash) id that can be used in URL's, hopefully speed things up",
                     "type": "array",
                     "items": {
-                        "type": "integer",
-                        "format": "int32"
+                        "type": "integer"
                     }
                 },
                 "url": {
                     "type": "string"
                 }
             }
+        },
+        "database.Job": {
+            "type": "object",
+            "properties": {
+                "completedAt": {
+                    "type": "string"
+                },
+                "createdAt": {
+                    "type": "string"
+                },
+                "currentStep": {
+                    "description": "Human-readable current step",
+                    "type": "string"
+                },
+                "error": {
+                    "description": "Error message if failed",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "array",
+                    "items": {
+                        "type": "integer"
+                    }
+                },
+                "message": {
+                    "description": "Status message",
+                    "type": "string"
+                },
+                "progress": {
+                    "description": "0-100",
+                    "type": "integer"
+                },
+                "result": {
+                    "description": "JSON result data",
+                    "type": "string"
+                },
+                "startedAt": {
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/database.JobStatus"
+                },
+                "totalSteps": {
+                    "description": "Total number of steps",
+                    "type": "integer"
+                },
+                "type": {
+                    "$ref": "#/definitions/database.JobType"
+                },
+                "updatedAt": {
+                    "type": "string"
+                }
+            }
+        },
+        "database.JobStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "running",
+                "completed",
+                "failed",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "JobStatusPending",
+                "JobStatusRunning",
+                "JobStatusCompleted",
+                "JobStatusFailed",
+                "JobStatusCancelled"
+            ]
+        },
+        "database.JobType": {
+            "type": "string",
+            "enum": [
+                "ingestion",
+                "cleanup",
+                "wordcloud",
+                "search_reindex"
+            ],
+            "x-enum-varnames": [
+                "JobTypeIngestion",
+                "JobTypeCleanup",
+                "JobTypeWordCloud",
+                "JobTypeSearchReindex"
+            ]
         },
         "engine.fileTreeStruct": {
             "type": "object",

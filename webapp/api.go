@@ -41,3 +41,20 @@ func BuildAPIURL(path string) string {
 	}
 	return baseURL + path
 }
+
+// Job represents a background job
+type Job struct {
+	ID          string `json:"id"`
+	Type        string `json:"type"`
+	Status      string `json:"status"`
+	Progress    int    `json:"progress"`
+	CurrentStep string `json:"currentStep"`
+	TotalSteps  int    `json:"totalSteps"`
+	Message     string `json:"message"`
+	Error       string `json:"error,omitempty"`
+	Result      string `json:"result,omitempty"`
+	CreatedAt   string `json:"createdAt"`
+	UpdatedAt   string `json:"updatedAt"`
+	StartedAt   string `json:"startedAt,omitempty"`
+	CompletedAt string `json:"completedAt,omitempty"`
+}

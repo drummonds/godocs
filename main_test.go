@@ -858,6 +858,7 @@ func TestAboutPageWithChromedp(t *testing.T) {
 		"application information",         // Section heading
 		"database configuration",          // Section heading
 		"ocr configuration",               // Section heading
+		"document storage",                // Section heading (NEW)
 		"document management system",      // Description text
 		"version",                         // Info field
 		"database",                        // Info field
@@ -875,7 +876,7 @@ func TestAboutPageWithChromedp(t *testing.T) {
 		}
 	}
 
-	if foundContent < 7 {
+	if foundContent < 8 {
 		t.Fatalf("❌ Only found %d/%d expected content items. Page may not have rendered correctly.", foundContent, len(expectedContent))
 	}
 

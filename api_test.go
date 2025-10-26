@@ -413,15 +413,12 @@ func TestAdminEndpoints(t *testing.T) {
 			t.Fatalf("Failed to parse clean response: %v", err)
 		}
 
-		// Should have scanned, deleted, and moved counts
-		if _, ok := response["scanned"]; !ok {
-			t.Error("Response missing 'scanned' field")
+		// Should have jobId and message (job-based response)
+		if _, ok := response["jobId"]; !ok {
+			t.Error("Response missing 'jobId' field")
 		}
-		if _, ok := response["deleted"]; !ok {
-			t.Error("Response missing 'deleted' field")
-		}
-		if _, ok := response["moved"]; !ok {
-			t.Error("Response missing 'moved' field")
+		if _, ok := response["message"]; !ok {
+			t.Error("Response missing 'message' field")
 		}
 	})
 
@@ -644,7 +641,7 @@ func TestGetAboutInfo(t *testing.T) {
 		}
 
 		// Verify required fields are present
-		requiredFields := []string{"version", "ocrConfigured", "ocrPath", "databaseType"}
+		requiredFields := []string{"version", "ocrConfigured", "ocrPath", "databaseType", "ingressPath", "documentPath"}
 		for _, field := range requiredFields {
 			if _, ok := aboutInfo[field]; !ok {
 				t.Errorf("Response missing required field: %s", field)
@@ -668,11 +665,21 @@ func TestGetAboutInfo(t *testing.T) {
 			t.Errorf("databaseType should be a string, got %T", aboutInfo["databaseType"])
 		}
 
+		if _, ok := aboutInfo["ingressPath"].(string); !ok {
+			t.Errorf("ingressPath should be a string, got %T", aboutInfo["ingressPath"])
+		}
+
+		if _, ok := aboutInfo["documentPath"].(string); !ok {
+			t.Errorf("documentPath should be a string, got %T", aboutInfo["documentPath"])
+		}
+
 		// Log the actual values
 		t.Logf("Version: %v", aboutInfo["version"])
 		t.Logf("OCR Configured: %v", aboutInfo["ocrConfigured"])
 		t.Logf("OCR Path: %v", aboutInfo["ocrPath"])
 		t.Logf("Database Type: %v", aboutInfo["databaseType"])
+		t.Logf("Ingress Path: %v", aboutInfo["ingressPath"])
+		t.Logf("Document Path: %v", aboutInfo["documentPath"])
 
 		// Verify OCR configuration matches server config
 		ocrConfigured := aboutInfo["ocrConfigured"].(bool)

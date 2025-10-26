@@ -17,6 +17,8 @@ type AboutInfo struct {
 	DatabasePort  string `json:"databasePort"`
 	DatabaseName  string `json:"databaseName"`
 	IsEphemeral   bool   `json:"isEphemeral"`
+	IngressPath   string `json:"ingressPath"`
+	DocumentPath  string `json:"documentPath"`
 }
 
 // AboutPage displays information about the application
@@ -138,6 +140,19 @@ func (a *AboutPage) Render() app.UI {
 							app.Text(a.aboutInfo.OCRPath),
 						)
 					}),
+				),
+			),
+			app.Div().Class("about-section").Body(
+				app.H3().Text("Document Storage"),
+				app.Div().Class("config-details").Body(
+					app.P().Body(
+						app.Strong().Text("Document Storage Path: "),
+						app.Text(a.aboutInfo.DocumentPath),
+					),
+					app.P().Body(
+						app.Strong().Text("Ingestion Folder: "),
+						app.Text(a.aboutInfo.IngressPath),
+					),
 				),
 			),
 			app.Div().Class("about-section").Body(

@@ -17,6 +17,7 @@ import (
 	"github.com/drummonds/goEDMS/database"
 	"github.com/gen2brain/go-fitz"
 	"github.com/ledongthuc/pdf"
+	"github.com/oklog/ulid/v2"
 )
 
 func (serverHandler *ServerHandler) ingressJobFunc(serverConfig config.ServerConfig, db database.DBInterface) {
@@ -58,6 +59,234 @@ func (serverHandler *ServerHandler) ingressJobFunc(serverConfig config.ServerCon
 		serverHandler.ingressDocument(filePath, "ingress")
 	}
 	deleteEmptyIngressFolders(serverHandler.ServerConfig.IngressPath) //after ingress clean empty folders
+}
+
+// ingressJobFuncWithTracking wraps the ingress job with progress tracking
+func (serverHandler *ServerHandler) ingressJobFuncWithTracking(serverConfig config.ServerConfig, db database.DBInterface, jobID ulid.ULID) {
+	// Add panic recovery and update job status on panic
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic recovered in ingress job", "panic", r, "jobID", jobID)
+			db.UpdateJobError(jobID, fmt.Sprintf("Panic: %v", r))
+		}
+	}()
+
+	// Mark job as running
+	if err := db.UpdateJobStatus(jobID, database.JobStatusRunning, "Scanning ingress folder"); err != nil {
+		Logger.Error("Failed to update job status", "error", err)
+	}
+
+	serverConfig, err := database.FetchConfigFromDB(db)
+	if err != nil {
+		Logger.Error("Error reading config from database", "error", err)
+		db.UpdateJobError(jobID, fmt.Sprintf("Failed to fetch config: %v", err))
+		return
+	}
+
+	Logger.Info("Starting Ingress Job with tracking", "path", serverConfig.IngressPath, "jobID", jobID)
+
+	// Scan for files
+	var ingressFiles []string
+	err = filepath.Walk(serverConfig.IngressPath, func(path string, info os.FileInfo, err error) error {
+		if err == nil && !info.IsDir() && path != serverConfig.IngressPath {
+			ingressFiles = append(ingressFiles, path)
+		}
+		return nil
+	})
+
+	if err != nil {
+		Logger.Error("Error scanning ingress folder", "error", err)
+		db.UpdateJobError(jobID, fmt.Sprintf("Scan failed: %v", err))
+		return
+	}
+
+	totalFiles := len(ingressFiles)
+	if totalFiles == 0 {
+		Logger.Info("No files to process in ingress folder")
+		db.CompleteJob(jobID, fmt.Sprintf(`{"filesProcessed": 0, "message": "No files found"}`))
+		return
+	}
+
+	Logger.Info("Found files to process", "count", totalFiles)
+	processedFiles := 0
+	errorCount := 0
+
+	// Process each file
+	for i, filePath := range ingressFiles {
+		fileName := filepath.Base(filePath)
+		progress := int((float64(i) / float64(totalFiles)) * 100)
+
+		// Update progress
+		db.UpdateJobProgress(jobID, progress, fmt.Sprintf("Processing: %s (%d/%d)", fileName, i+1, totalFiles))
+
+		Logger.Debug("Processing file with tracking", "filePath", filePath, "progress", progress)
+
+		// Process the document
+		err := serverHandler.ingressDocumentWithError(filePath, "ingress")
+		if err != nil {
+			Logger.Error("Failed to process document", "filePath", filePath, "error", err)
+			errorCount++
+		} else {
+			processedFiles++
+		}
+	}
+
+	// Clean up empty folders
+	deleteEmptyIngressFolders(serverConfig.IngressPath)
+
+	// Recalculate word cloud after ingestion
+	db.UpdateJobProgress(jobID, 95, "Updating word cloud")
+	Logger.Info("Recalculating word cloud after ingestion")
+	if err := db.RecalculateAllWordFrequencies(); err != nil {
+		Logger.Error("Word cloud recalculation failed after ingestion", "error", err)
+	}
+
+	// Complete the job
+	result := fmt.Sprintf(`{"filesProcessed": %d, "filesTotal": %d, "errors": %d}`, processedFiles, totalFiles, errorCount)
+	if err := db.CompleteJob(jobID, result); err != nil {
+		Logger.Error("Failed to mark job as complete", "error", err)
+	}
+
+	Logger.Info("Ingestion job completed", "jobID", jobID, "processed", processedFiles, "total", totalFiles, "errors", errorCount)
+}
+
+// cleanupJobFuncWithTracking performs database cleanup with job tracking
+func (serverHandler *ServerHandler) cleanupJobFuncWithTracking(db database.DBInterface, jobID ulid.ULID) {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic recovered in cleanup job", "panic", r, "jobID", jobID)
+			db.UpdateJobError(jobID, fmt.Sprintf("Panic: %v", r))
+		}
+	}()
+
+	// Mark job as running
+	db.UpdateJobStatus(jobID, database.JobStatusRunning, "Fetching documents from database")
+
+	// Get all documents from database
+	documentsPtr, err := database.FetchAllDocuments(db)
+	if err != nil {
+		Logger.Error("Failed to fetch documents for cleanup", "error", err)
+		db.UpdateJobError(jobID, fmt.Sprintf("Failed to fetch documents: %v", err))
+		return
+	}
+
+	if documentsPtr == nil {
+		result := `{"scanned": 0, "deleted": 0, "moved": 0}`
+		db.CompleteJob(jobID, result)
+		return
+	}
+
+	documents := *documentsPtr
+	totalDocs := len(documents)
+	deletedCount := 0
+
+	Logger.Info("Starting database cleanup", "total_documents", totalDocs)
+	db.UpdateJobProgress(jobID, 10, fmt.Sprintf("Checking %d documents", totalDocs))
+
+	// Step 1: Check each document's file existence and remove orphaned DB entries
+	for i, doc := range documents {
+		if doc.Path == "" {
+			Logger.Warn("Document has empty path, skipping", "id", doc.StormID, "name", doc.Name)
+			continue
+		}
+
+		// Update progress
+		progress := 10 + int((float64(i)/float64(totalDocs))*50)
+		db.UpdateJobProgress(jobID, progress, fmt.Sprintf("Checking document %d/%d", i+1, totalDocs))
+
+		// Check if file exists
+		if _, err := os.Stat(doc.Path); os.IsNotExist(err) {
+			Logger.Info("File not found, removing from database", "path", doc.Path, "id", doc.StormID)
+
+			// Delete from database
+			if err := database.DeleteDocument(doc.ULID.String(), db); err != nil {
+				Logger.Error("Failed to delete document from DB", "error", err, "id", doc.StormID)
+				continue
+			}
+			deletedCount++
+		}
+	}
+
+	// Step 2: Find orphaned files in document storage and move them to ingress
+	db.UpdateJobProgress(jobID, 60, "Scanning for orphaned files")
+	movedCount := 0
+	orphanedFiles, err := serverHandler.findOrphanedDocuments(documents)
+	if err != nil {
+		Logger.Error("Failed to scan for orphaned documents", "error", err)
+		// Continue with cleanup even if orphan scan fails
+	} else {
+		totalOrphans := len(orphanedFiles)
+		for i, orphanPath := range orphanedFiles {
+			progress := 60 + int((float64(i)/float64(totalOrphans))*20)
+			db.UpdateJobProgress(jobID, progress, fmt.Sprintf("Moving orphan %d/%d", i+1, totalOrphans))
+
+			if err := serverHandler.moveOrphanToIngress(orphanPath); err != nil {
+				Logger.Error("Failed to move orphaned document to ingress", "path", orphanPath, "error", err)
+			} else {
+				movedCount++
+			}
+		}
+	}
+
+	// Step 3: Recalculate word cloud
+	db.UpdateJobProgress(jobID, 80, "Recalculating word cloud")
+	Logger.Info("Recalculating word cloud after database cleanup")
+	if err := db.RecalculateAllWordFrequencies(); err != nil {
+		Logger.Error("Word cloud recalculation failed after cleanup", "error", err)
+	}
+
+	// Complete the job
+	result := fmt.Sprintf(`{"scanned": %d, "deleted": %d, "moved": %d}`, totalDocs, deletedCount, movedCount)
+	if err := db.CompleteJob(jobID, result); err != nil {
+		Logger.Error("Failed to mark cleanup job as complete", "error", err)
+	}
+
+	Logger.Info("Database cleanup job completed", "jobID", jobID, "scanned", totalDocs, "deleted", deletedCount, "moved", movedCount)
+}
+
+// ingressDocumentWithError is like ingressDocument but returns errors instead of just logging
+func (serverHandler *ServerHandler) ingressDocumentWithError(filePath string, source string) error {
+	defer func() {
+		if r := recover(); r != nil {
+			Logger.Error("Panic recovered while processing document", "filePath", filePath, "panic", r)
+		}
+	}()
+
+	switch filepath.Ext(filePath) {
+	case ".pdf":
+		fullText, err := pdfProcessing(filePath)
+		if err != nil {
+			fullText, err = serverHandler.convertToImage(filePath)
+			if err != nil {
+				return fmt.Errorf("OCR processing failed: %w", err)
+			}
+		}
+		if fullText == nil {
+			return fmt.Errorf("PDF processing returned nil text")
+		}
+		return serverHandler.addDocumentToDatabase(filePath, *fullText, source)
+
+	case ".txt", ".rtf":
+		textProcessing(filePath)
+		return nil
+
+	case ".doc", ".docx", ".odf":
+		wordDocProcessing(filePath)
+		return nil
+
+	case ".tiff", ".jpg", ".jpeg", ".png":
+		fullText, err := serverHandler.ocrProcessing(filePath)
+		if err != nil {
+			return fmt.Errorf("OCR processing failed: %w", err)
+		}
+		if fullText == nil {
+			return fmt.Errorf("OCR processing returned nil text")
+		}
+		return serverHandler.addDocumentToDatabase(filePath, *fullText, source)
+
+	default:
+		return fmt.Errorf("unsupported file type: %s", filepath.Ext(filePath))
+	}
 }
 
 func (serverHandler *ServerHandler) ingressDocument(filePath string, source string) { //source is either from ingress folder or from upload

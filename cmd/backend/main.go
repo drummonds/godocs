@@ -169,6 +169,11 @@ func main() {
 	e.GET("/api/wordcloud", serverHandler.GetWordCloud)
 	e.POST("/api/wordcloud/recalculate", serverHandler.RecalculateWordCloud)
 
+	// Job tracking API routes
+	e.GET("/api/jobs", serverHandler.GetRecentJobs)
+	e.GET("/api/jobs/active", serverHandler.GetActiveJobs)
+	e.GET("/api/jobs/:id", serverHandler.GetJob)
+
 	// Document view routes (serve actual PDF/document files)
 	// These are not under /api/* because they serve files, not JSON
 	serverHandler.AddDocumentViewRoutes()

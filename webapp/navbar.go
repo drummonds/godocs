@@ -1,6 +1,7 @@
 package webapp
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -16,6 +17,8 @@ var (
 // NavBar is the navigation bar component
 type NavBar struct {
 	app.Compo
+	activeJobCount int
+	refreshTicker  *time.Ticker
 }
 
 // Render renders the navigation bar
@@ -60,6 +63,10 @@ func (n *NavBar) Render() app.UI {
 					Href("/search").
 					Class("navbar-item").
 					Body(app.Text("Search")),
+				app.A().
+					Href("/jobs").
+					Class("navbar-item").
+					Body(app.Text("Jobs")),
 			),
 		)
 }
@@ -80,11 +87,90 @@ func (n *NavBar) isSidebarOpen(ctx app.Context) bool {
 	return isOpen
 }
 
-// getVersionInfo returns formatted version and date information
+// OnMount is called when the component is mounted
+func (n *NavBar) OnMount(ctx app.Context) {
+	n.loadActiveJobCount(ctx)
+
+	// Start auto-refresh every 5 seconds
+	ctx.Async(func() {
+		n.refreshTicker = time.NewTicker(5 * time.Second)
+		for range n.refreshTicker.C {
+			n.loadActiveJobCount(ctx)
+		}
+	})
+}
+
+// OnDismount is called when the component is unmounted
+func (n *NavBar) OnDismount() {
+	if n.refreshTicker != nil {
+		n.refreshTicker.Stop()
+	}
+}
+
+// getVersionInfo returns formatted version and date information with job count
 func (n *NavBar) getVersionInfo() string {
 	date := BuildDate
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
 	}
-	return fmt.Sprintf("%s | %s", Version, date)
+
+	jobInfo := ""
+	if n.activeJobCount > 0 {
+		jobInfo = fmt.Sprintf(" | %d active job", n.activeJobCount)
+		if n.activeJobCount > 1 {
+			jobInfo += "s"
+		}
+	}
+
+	return fmt.Sprintf("%s | %s%s", Version, date, jobInfo)
+}
+
+// loadActiveJobCount fetches the count of active jobs from the API
+func (n *NavBar) loadActiveJobCount(ctx app.Context) {
+	ctx.Async(func() {
+		res := app.Window().Call("fetch", BuildAPIURL("/api/jobs/active"))
+
+		res.Call("then", app.FuncOf(func(this app.Value, args []app.Value) interface{} {
+			if len(args) == 0 {
+				return nil
+			}
+			response := args[0]
+
+			status := response.Get("status").Int()
+
+			response.Call("json").Call("then", app.FuncOf(func(this app.Value, args []app.Value) interface{} {
+				if len(args) == 0 {
+					return nil
+				}
+
+				jsonData := args[0]
+
+				ctx.Dispatch(func(ctx app.Context) {
+					if status >= 200 && status < 300 {
+						// Parse jobs array to count them
+						if jsonData.Truthy() && jsonData.Type() != app.TypeNull {
+							var jobs []Job
+							jsonStr := app.Window().Get("JSON").Call("stringify", jsonData).String()
+							if err := json.Unmarshal([]byte(jsonStr), &jobs); err == nil {
+								n.activeJobCount = len(jobs)
+							} else {
+								n.activeJobCount = 0
+							}
+						} else {
+							n.activeJobCount = 0
+						}
+					} else {
+						n.activeJobCount = 0
+					}
+				})
+
+				return nil
+			}))
+
+			return nil
+		})).Call("catch", app.FuncOf(func(this app.Value, args []app.Value) interface{} {
+			// Silently fail - don't update job count on network error
+			return nil
+		}))
+	})
 }

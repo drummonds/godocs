@@ -214,7 +214,7 @@ func (serverHandler *ServerHandler) MoveDocuments(context echo.Context) error {
 // @Accept json
 // @Produce json
 // @Param term query string true "Search term"
-// @Success 200 {array} fileTreeStruct "Search results"
+// @Success 200 {object} fullFileSystem "Search results"
 // @Success 204 "No results found"
 // @Failure 404 {string} string "Empty search term"
 // @Failure 500 {object} map[string]interface{} "Internal server error"
@@ -243,7 +243,13 @@ func (serverHandler *ServerHandler) SearchDocuments(context echo.Context) error 
 		Logger.Error("Unable to convert search results to file tree", "error", err)
 		return context.JSON(http.StatusNotFound, err)
 	}
-	return context.JSON(http.StatusOK, fullResults)
+
+	// Wrap the results in fullFileSystem struct to match frontend expectations
+	response := fullFileSystem{
+		FileSystem: *fullResults,
+		Error:      "",
+	}
+	return context.JSON(http.StatusOK, response)
 }
 
 // ReindexSearchDocuments reindexes all documents for full-text search
@@ -694,6 +700,8 @@ func (serverHandler *ServerHandler) GetAboutInfo(c echo.Context) error {
 		"databasePort":  dbPort,
 		"databaseName":  dbName,
 		"isEphemeral":   isEphemeral,
+		"ingressPath":   serverHandler.ServerConfig.IngressPath,
+		"documentPath":  serverHandler.ServerConfig.DocumentPath,
 	}
 
 	return c.JSON(http.StatusOK, aboutInfo)
@@ -705,26 +713,29 @@ func (serverHandler *ServerHandler) GetAboutInfo(c echo.Context) error {
 // @Tags Admin
 // @Accept json
 // @Produce json
-// @Success 200 {string} string "Ingestion started"
+// @Success 200 {object} map[string]interface{} "Job created with job ID"
 // @Router /ingest [post]
 func (serverHandler *ServerHandler) RunIngestNow(c echo.Context) error {
 	Logger.Info("Manual ingestion triggered via API")
 
+	// Create a job to track the ingestion
+	job, err := serverHandler.DB.CreateJob(database.JobTypeIngestion, "Starting document ingestion")
+	if err != nil {
+		Logger.Error("Failed to create ingestion job", "error", err)
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
+			"error": "Failed to create job",
+		})
+	}
+
 	// Run ingestion in a goroutine so we can return immediately
 	go func() {
-		serverHandler.ingressJobFunc(serverHandler.ServerConfig, serverHandler.DB)
-		Logger.Info("Manual ingestion completed")
-
-		// Recalculate word cloud after ingestion
-		Logger.Info("Recalculating word cloud after ingestion")
-		if err := serverHandler.DB.RecalculateAllWordFrequencies(); err != nil {
-			Logger.Error("Word cloud recalculation failed after ingestion", "error", err)
-		} else {
-			Logger.Info("Word cloud recalculation completed successfully after ingestion")
-		}
+		serverHandler.ingressJobFuncWithTracking(serverHandler.ServerConfig, serverHandler.DB, job.ID)
 	}()
 
-	return c.String(http.StatusOK, "Ingestion started")
+	return c.JSON(http.StatusOK, map[string]interface{}{
+		"message": "Ingestion started",
+		"jobId":   job.ID.String(),
+	})
 }
 
 // CleanDatabase checks all documents and removes entries for missing files,
@@ -734,91 +745,29 @@ func (serverHandler *ServerHandler) RunIngestNow(c echo.Context) error {
 // @Tags Admin
 // @Accept json
 // @Produce json
-// @Success 200 {object} map[string]interface{} "Cleanup statistics"
+// @Success 200 {object} map[string]interface{} "Job created with jobId"
 // @Failure 500 {object} map[string]interface{} "Internal server error"
 // @Router /clean [post]
 func (serverHandler *ServerHandler) CleanDatabase(c echo.Context) error {
 	Logger.Info("Database cleanup triggered via API")
 
-	// Get all documents from database
-	documentsPtr, err := database.FetchAllDocuments(serverHandler.DB)
+	// Create a job to track the cleanup
+	job, err := serverHandler.DB.CreateJob(database.JobTypeCleanup, "Starting database cleanup")
 	if err != nil {
-		Logger.Error("Failed to fetch documents for cleanup", "error", err)
+		Logger.Error("Failed to create cleanup job", "error", err)
 		return c.JSON(http.StatusInternalServerError, map[string]interface{}{
-			"error":   "Failed to fetch documents",
-			"message": err.Error(),
+			"error": "Failed to create cleanup job",
 		})
 	}
 
-	if documentsPtr == nil {
-		return c.JSON(http.StatusOK, map[string]interface{}{
-			"message": "No documents found",
-			"scanned": 0,
-			"deleted": 0,
-			"moved":   0,
-		})
-	}
-
-	documents := *documentsPtr
-	scannedCount := len(documents)
-	deletedCount := 0
-
-	Logger.Info("Starting database cleanup", "total_documents", scannedCount)
-
-	// Step 1: Check each document's file existence and remove orphaned DB entries
-	for _, doc := range documents {
-		if doc.Path == "" {
-			Logger.Warn("Document has empty path, skipping", "id", doc.StormID, "name", doc.Name)
-			continue
-		}
-
-		// Check if file exists
-		if _, err := os.Stat(doc.Path); os.IsNotExist(err) {
-			Logger.Info("File not found, removing from database", "path", doc.Path, "id", doc.StormID)
-
-			// Delete from database
-			if err := database.DeleteDocument(doc.ULID.String(), serverHandler.DB); err != nil {
-				Logger.Error("Failed to delete document from DB", "error", err, "id", doc.StormID)
-				continue
-			}
-		deletedCount++
-		}
-
-	}
-
-	// Step 2: Find orphaned files in document storage and move them to ingress
-	movedCount := 0
-	orphanedFiles, err := serverHandler.findOrphanedDocuments(documents)
-	if err != nil {
-		Logger.Error("Failed to scan for orphaned documents", "error", err)
-		// Continue with cleanup even if orphan scan fails
-	} else {
-		for _, orphanPath := range orphanedFiles {
-			if err := serverHandler.moveOrphanToIngress(orphanPath); err != nil {
-				Logger.Error("Failed to move orphaned document to ingress", "path", orphanPath, "error", err)
-			} else {
-				movedCount++
-			}
-		}
-	}
-
-	Logger.Info("Database cleanup completed", "scanned", scannedCount, "deleted", deletedCount, "moved", movedCount)
-
-	// Recalculate word cloud after cleanup in a goroutine
+	// Run cleanup in goroutine with job tracking
 	go func() {
-		Logger.Info("Recalculating word cloud after database cleanup")
-		if err := serverHandler.DB.RecalculateAllWordFrequencies(); err != nil {
-			Logger.Error("Word cloud recalculation failed after cleanup", "error", err)
-		} else {
-			Logger.Info("Word cloud recalculation completed successfully after cleanup")
-		}
+		serverHandler.cleanupJobFuncWithTracking(serverHandler.DB, job.ID)
 	}()
 
 	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "Cleanup completed successfully",
-		"scanned": scannedCount,
-		"deleted": deletedCount,
-		"moved":   movedCount,
+		"message": "Database cleanup started",
+		"jobId":   job.ID.String(),
 	})
 }
 

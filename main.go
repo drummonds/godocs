@@ -185,6 +185,11 @@ console.log("goEDMS Config loaded:", window.goEDMSConfig);
 	e.GET("/api/wordcloud", serverHandler.GetWordCloud)
 	e.POST("/api/wordcloud/recalculate", serverHandler.RecalculateWordCloud)
 
+	// Job tracking API routes
+	e.GET("/api/jobs", serverHandler.GetRecentJobs)
+	e.GET("/api/jobs/active", serverHandler.GetActiveJobs)
+	e.GET("/api/jobs/:id", serverHandler.GetJob)
+
 	// Document view routes (serve actual files - not JSON, so not under /api/*)
 	serverHandler.AddDocumentViewRoutes() //Add all existing documents to direct view links
 
