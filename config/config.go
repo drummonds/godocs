@@ -168,15 +168,23 @@ func SetupServer() (ServerConfig, *slog.Logger) {
 
 	serverConfigLive.IngressInterval = getEnvInt("INGRESS_INTERVAL", 10)
 	serverConfigLive.IngressPreserve = getEnvBool("INGRESS_PRESERVE_STRUCTURE", true)
-	serverConfigLive.IngressDelete = getEnvBool("INGRESS_DELETE", false)
+	serverConfigLive.IngressDelete = getEnvBool("INGRESS_DELETE", true) // Changed default to true - delete source files after ingestion
 
-	ingressMoveFolder := filepath.ToSlash(getEnv("INGRESS_MOVE_FOLDER", "done"))
-	ingressMoveFolderABS, err := filepath.Abs(ingressMoveFolder)
-	if err != nil {
-		logger.Error("Failed creating absolute path for ingress move folder", "error", err)
+	// IngressMoveFolder is now deprecated - we delete files instead of moving them
+	// Kept for backwards compatibility but not created by default
+	ingressMoveFolder := filepath.ToSlash(getEnv("INGRESS_MOVE_FOLDER", ""))
+	if ingressMoveFolder != "" {
+		ingressMoveFolderABS, err := filepath.Abs(ingressMoveFolder)
+		if err != nil {
+			logger.Error("Failed creating absolute path for ingress move folder", "error", err)
+		}
+		serverConfigLive.IngressMoveFolder = ingressMoveFolderABS
+		if !serverConfigLive.IngressDelete {
+			os.MkdirAll(ingressMoveFolderABS, os.ModePerm)
+		}
+	} else {
+		serverConfigLive.IngressMoveFolder = ""
 	}
-	serverConfigLive.IngressMoveFolder = ingressMoveFolderABS
-	os.MkdirAll(ingressMoveFolderABS, os.ModePerm)
 
 	fmt.Println("Ingress Interval: ", serverConfigLive.IngressInterval)
 	fmt.Println("\n========================================")

@@ -20,5 +20,6 @@ goedms.log
 goEDMS.db.lock
 goEDMS.db
 
-# Environment variables
+# Files for local testing
 .env
+demo

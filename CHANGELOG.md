@@ -2,16 +2,72 @@
 
 All notable changes to goEDMS will be documented in this file.
 
+## 0.8.0 (Unreleased)
+
+### Added
+- **Word Cloud Visualization**: Automatic word frequency analysis for all documents
+  - Real-time word cloud generation using PostgreSQL queries
+  - Excludes common stop words for better visualization
+  - Integrated into frontend with responsive display
+- **Step-Based Ingestion Pipeline**: Complete refactoring of document ingestion
+  - Step 1: Hash calculation and duplicate detection
+  - Step 2: File move with hash verification
+  - Step 3: Text extraction and search indexing
+  - Comprehensive job tracking with per-file progress reporting
+  - Graceful failure handling - documents saved even if OCR fails
+- **Build System Improvements**:
+  - Added `build-wasm.sh` script for WASM builds with version embedding
+  - Fixed Taskfile.yml YAML syntax issues
+  - Version information now properly embedded in WASM binary
+- **Improved OCR Handling**:
+  - Documents with no extractable text (handwritten, blank, etc.) now stored successfully
+  - OCR failures return empty text instead of errors
+  - Better logging for OCR issues
+
+### Changed
+- **BREAKING**: Configuration now stored in PostgreSQL database
+  - Removed `config/serverConfig.toml` entirely
+  - Only database connection uses `.env` file
+  - All other settings (ingress paths, OCR, etc.) stored in database
+  - Web interface for configuration management
+- **BREAKING**: Default ingestion behavior changed
+  - `INGRESS_DELETE=true` by default (deletes source files)
+  - Removed "done" folder concept
+  - Files are hashed, verified, then source deleted
+- **Ingestion Storage**: Documents no longer duplicated in multiple folders
+  - Single copy in documents folder with database tracking
+  - MD5 hash verification before and after file copy
+
+### Fixed
+- Orphaned files when OCR fails now prevented
+- Empty OCR results treated as valid (not errors)
+- Test files no longer leak into production directories
+- Taskfile.yml syntax errors causing build failures
+
+### Documentation
+- Updated README.md to remove outdated config.toml references
+- Added comprehensive ingestion flow documentation
+- Created BUILD.md with detailed build instructions
+- Added INGESTION_REFACTOR.md documenting step-based approach
+
 ## 0.7.0 2025-10-25
 
-- Converting to Postgres full text search
+### Added
+- **WebAssembly Frontend**: Complete migration from React to go-app
+  - Pure Go frontend compiled to WebAssembly
+  - No npm dependencies needed
+  - Embedded in backend binary
+- **PostgreSQL Full-Text Search**: Replaced Bleve with native PostgreSQL
+  - Automatic index updates via triggers
+  - Better performance with GIN indexes
+  - Single word, phrase, and prefix matching supported
 
 ## 0.6.0 2025-10-24
 
 ### Changed
 - **BREAKING**: Replaced Bleve full-text search with PostgreSQL native full-text search
   - Simpler architecture with fewer external dependencies
-  - Automatic index updates via PostgreSQL triggers
+  - Automatic index updates via PostgreSQL triggerConverting to Postgres full text searchs
   - Better performance with GIN indexes
   - No separate search index files needed
   - Search functionality preserved: single word, phrase, and prefix matching supported

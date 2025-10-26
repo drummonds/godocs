@@ -60,15 +60,24 @@ tasks:
 
   build:wasm:
     desc: Build the WebAssembly application
+    vars:
+      VERSION:
+        sh: git describe --tags --always 2>/dev/null || echo "dev"
+      BUILD_DATE:
+        sh: date -u +"%Y-%m-%d"
     cmds:
-      - echo "Building WebAssembly application..."
+      - "echo 'Building WebAssembly application (version {{.VERSION}})...'"
       - mkdir -p web
       - mkdir -p public/built
-      - GOOS=js GOARCH=wasm go build -o web/app.wasm ./cmd/webapp
-      - echo "Copying wasm_exec.js to web/ and public/built/..."
-      - cp /usr/local/go/lib/wasm/wasm_exec.js web/wasm_exec.js || cp $(go env GOROOT)/misc/wasm/wasm_exec.js web/wasm_exec.js
+      - >-
+        GOOS=js GOARCH=wasm go build
+        -ldflags="-X 'github.com/drummonds/goEDMS/webapp.Version={{.VERSION}}'
+        -X 'github.com/drummonds/goEDMS/webapp.BuildDate={{.BUILD_DATE}}'"
+        -o web/app.wasm ./cmd/webapp
+      - "echo 'Copying wasm_exec.js to web/ and public/built/...'"
+      - "cp /usr/local/go/lib/wasm/wasm_exec.js web/wasm_exec.js || cp $(go env GOROOT)/misc/wasm/wasm_exec.js web/wasm_exec.js"
       - cp web/wasm_exec.js public/built/wasm_exec.js
-      - echo "WebAssembly build complete!"
+      - "echo 'WebAssembly build complete! Version: {{.VERSION}}'"
       - ls -lh web/
       - ls -lh public/built/wasm_exec.js
 

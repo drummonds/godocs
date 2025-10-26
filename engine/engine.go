@@ -110,22 +110,25 @@ func (serverHandler *ServerHandler) ingressJobFuncWithTracking(serverConfig conf
 	Logger.Info("Found files to process", "count", totalFiles)
 	processedFiles := 0
 	errorCount := 0
+	duplicateCount := 0
 
-	// Process each file
+	// Process each file with detailed step tracking
 	for i, filePath := range ingressFiles {
 		fileName := filepath.Base(filePath)
-		progress := int((float64(i) / float64(totalFiles)) * 100)
 
-		// Update progress
-		db.UpdateJobProgress(jobID, progress, fmt.Sprintf("Processing: %s (%d/%d)", fileName, i+1, totalFiles))
+		Logger.Info("Processing file with step-based ingestion", "file", fileName, "number", i+1, "total", totalFiles)
 
-		Logger.Debug("Processing file with tracking", "filePath", filePath, "progress", progress)
-
-		// Process the document
-		err := serverHandler.ingressDocumentWithError(filePath, "ingress")
+		// Process the document using new step-based approach
+		err := serverHandler.IngestDocumentWithSteps(filePath, db, jobID, i, totalFiles)
 		if err != nil {
-			Logger.Error("Failed to process document", "filePath", filePath, "error", err)
-			errorCount++
+			if len(err.Error()) >= 9 && err.Error()[:9] == "duplicate" {
+				Logger.Info("Skipped duplicate document", "filePath", filePath)
+				duplicateCount++
+				processedFiles++ // Count as processed (successfully skipped)
+			} else {
+				Logger.Error("Failed to process document", "filePath", filePath, "error", err)
+				errorCount++
+			}
 		} else {
 			processedFiles++
 		}
@@ -142,12 +145,12 @@ func (serverHandler *ServerHandler) ingressJobFuncWithTracking(serverConfig conf
 	}
 
 	// Complete the job
-	result := fmt.Sprintf(`{"filesProcessed": %d, "filesTotal": %d, "errors": %d}`, processedFiles, totalFiles, errorCount)
+	result := fmt.Sprintf(`{"filesProcessed": %d, "filesTotal": %d, "errors": %d, "duplicates": %d}`, processedFiles, totalFiles, errorCount, duplicateCount)
 	if err := db.CompleteJob(jobID, result); err != nil {
 		Logger.Error("Failed to mark job as complete", "error", err)
 	}
 
-	Logger.Info("Ingestion job completed", "jobID", jobID, "processed", processedFiles, "total", totalFiles, "errors", errorCount)
+	Logger.Info("Ingestion job completed", "jobID", jobID, "processed", processedFiles, "total", totalFiles, "errors", errorCount, "duplicates", duplicateCount)
 }
 
 // cleanupJobFuncWithTracking performs database cleanup with job tracking
@@ -642,14 +645,20 @@ func (serverHandler *ServerHandler) ocrProcessing(imageName string) (*string, er
 	err = tesseractCMD.Run()
 	Logger.Debug("Tesseract Command Run was", "command", tesseractCMD.String())
 	if err != nil {
-		Logger.Error("Tesseract encountered error when attempting to OCR image", "imageName", imageName, "detail", stdBuffer.String())
-		return nil, err
+		Logger.Warn("Tesseract encountered error when attempting to OCR image, storing document without text", "imageName", imageName, "detail", stdBuffer.String())
+		emptyText := ""
+		return &emptyText, nil // Return empty text instead of error - document should still be saved
 	}
 	fileBytes, err := os.ReadFile(textFileName + ".txt")
+	if err != nil {
+		Logger.Warn("Unable to read OCR output file, storing document without text", "textFile", textFileName+".txt", "error", err)
+		emptyText := ""
+		return &emptyText, nil
+	}
 	fullText = string(fileBytes)
 	if fullText == "" {
-		Logger.Error("OCR Result returned empty string... OCR'ing the document failed", "imageName", imageName, "error", err)
-		return nil, err
+		Logger.Info("OCR returned empty string - document may have no recognizable text (e.g., handwritten, blank, or image-only)", "imageName", imageName)
+		// Empty text is valid - return it successfully
 	}
 	return &fullText, nil
 }

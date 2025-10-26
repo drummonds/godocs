@@ -250,6 +250,9 @@ func (j *JobsPage) formatResult(result string) string {
 	if val, ok := data["filesTotal"]; ok {
 		parts = append(parts, fmt.Sprintf("Total: %.0f", val))
 	}
+	if val, ok := data["duplicates"]; ok && val.(float64) > 0 {
+		parts = append(parts, fmt.Sprintf("Duplicates: %.0f", val))
+	}
 	if val, ok := data["errors"]; ok && val.(float64) > 0 {
 		parts = append(parts, fmt.Sprintf("Errors: %.0f", val))
 	}

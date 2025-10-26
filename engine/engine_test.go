@@ -97,8 +97,9 @@ func TestOCRProcessingAndDatabaseStorage(t *testing.T) {
 	serverConfig.IngressPath = testIngressDir
 	serverConfig.IngressMoveFolder = testDoneDir
 	serverConfig.DocumentPath = testDocumentsDir
+	serverConfig.NewDocumentFolder = testDocumentsDir  // Use temp directory for new documents
 	serverConfig.NewDocumentFolderRel = ""  // Store documents directly in DocumentPath
-	serverConfig.IngressDelete = false
+	serverConfig.IngressDelete = true  // Delete test files instead of moving them
 	serverConfig.IngressPreserve = false  // Don't preserve folder structure for test
 
 	// Save config to database
@@ -136,7 +137,19 @@ func TestOCRProcessingAndDatabaseStorage(t *testing.T) {
 	}
 
 	// Process the document through ingress
-	serverHandler.ingressDocument(testPDFPath, "test")
+	// Use "ingress" as source so cleanup logic runs and removes the test file
+	serverHandler.ingressDocument(testPDFPath, "ingress")
+
+	// Clean up any temp OCR files created during processing
+	defer func() {
+		tempFiles := []string{
+			filepath.Join("temp", "test_ocr_document.png"),
+			filepath.Join("temp", "test_ocr_document.txt"),
+		}
+		for _, f := range tempFiles {
+			os.Remove(f)
+		}
+	}()
 
 	// Query the database to verify the document was stored
 	documents, err := testDB.GetAllDocuments()
@@ -210,25 +223,33 @@ func TestOCRProcessingAndDatabaseStorage(t *testing.T) {
 	}
 
 	if rec.Code == http.StatusOK {
-		var searchResults []database.Document
-		if err := json.Unmarshal(rec.Body.Bytes(), &searchResults); err != nil {
+		// Parse the new wrapped response format
+		var response struct {
+			FileSystem []struct {
+				ID    string `json:"id"`
+				ULID  string `json:"ulid"`
+				Name  string `json:"name"`
+				IsDir bool   `json:"isDir"`
+			} `json:"fileSystem"`
+			Error string `json:"error"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 			t.Logf("Response body: %s", rec.Body.String())
 			t.Fatalf("Failed to parse search results: %v", err)
 		}
 
-		t.Logf("✓ Search API returned %d result(s)", len(searchResults))
+		t.Logf("✓ Search API returned %d result(s)", len(response.FileSystem))
 
 		// Verify our document is in the results
-		if len(searchResults) == 0 {
+		if len(response.FileSystem) == 0 {
 			t.Log("⚠️  Search returned no results for OCR'd text - this may be a timing/indexing issue in tests")
 		} else {
 			foundOurDoc := false
-			for _, doc := range searchResults {
-				if strings.Contains(doc.Name, "test_ocr_document") {
+			for _, item := range response.FileSystem {
+				if strings.Contains(item.Name, "test_ocr_document") && !item.IsDir {
 					foundOurDoc = true
-					t.Logf("✓ Found our test document in search results: %s", doc.Name)
-					t.Logf("  - Document ULID: %s", doc.ULID.String())
-					t.Logf("  - Full text length: %d characters", len(doc.FullText))
+					t.Logf("✓ Found our test document in search results: %s", item.Name)
+					t.Logf("  - Document ULID: %s", item.ULID)
 					break
 				}
 			}
