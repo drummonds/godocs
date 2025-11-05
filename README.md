@@ -2,7 +2,8 @@
 
 # goEDMS
 
-A lightweight Electronic Document Management System (EDMS) for home users, built entirely in Go.
+A lightweight Electronic Document Management System (EDMS) for home users, built entirely in Go. It has no
+user authentication.
 
 **Originally created by [deranjer/goEDMS](https://github.com/deranjer/goEDMS)** - This is a hard fork with significant modernization and new features.
 
@@ -21,7 +22,7 @@ goEDMS is a self-hosted document management system designed for home users to sc
 - ✨ WebAssembly frontend using go-app (replaced React)
 - ✨ Pure Go image processing (removed ImageMagick dependency)
 - ✨ PostgreSQL full-text search with word cloud visualization
-- ✨ Step-based ingestion with comprehensive job tracking
+- ✨ Step-based ingestion wiDeploy to gokrazy with local dbth comprehensive job tracking
 - ✨ Database-stored configuration (removed TOML files)
 - ✨ Graceful OCR failure handling
 
@@ -50,7 +51,7 @@ goEDMS is a self-hosted document management system designed for home users to sc
 - [ ] Document archival system
 
 
-## Configuration
+## ConfigurationDeploy to gokrazy with local db
 
 goEDMS supports multiple ways to configure the application:
 
@@ -101,7 +102,7 @@ For production use with a persistent PostgreSQL database:
    GOEDMS_DATABASE_NAME=goedms
    GOEDMS_DATABASE_USER=goedms
    GOEDMS_DATABASE_PASSWORD=your_password
-   GOEDMS_DATABASE_SSLMODE=disable
+   GOEDMS_DATABASE_SSLMODE=dDeploy to gokrazy with local dbisable
    ```
 
 5. **Run goEDMS**
@@ -175,7 +176,7 @@ For more details, see:
 
 Main Tasks (using [Task](https://taskfile.dev)):
 
-**Development:**
+**Development:**Deploy to gokrazy with local db
 - `task dev` - Run the backend application locally (serves WASM frontend)
 
 **Testing:**
@@ -198,7 +199,7 @@ Main Tasks (using [Task](https://taskfile.dev)):
 - `task fmt` - Format Go code
 - `task vet` - Run go vet
 - `task check` - Run fmt, vet, and tests
-
+Deploy to gokrazy with local db
 **Cleanup:**
 - `task clean` - Remove build artifacts
 
@@ -261,6 +262,11 @@ go test -v ./webapp -run TestSearch     # Frontend tests
 go test -v -run TestSearchPerformance   # Performance tests
 ```
 
+### Performance
+
+On a representative sample of docs on my laptop is running an ingestion speed about 4 seconds per document.
+
+
 ## Technology Stack
 
 - **Backend**: Go 1.22+ with Echo framework
@@ -269,3 +275,8 @@ go test -v -run TestSearchPerformance   # Performance tests
 - **OCR**: Tesseract for image and scanned PDF processing
 - **PDF Processing**: Native Go libraries
 - **Job Tracking**: ULID-based job system with real-time progress
+
+
+## Deployment
+
+I am currently trialling deployment to a gokrazy instance with https://github.com/drummonds/gokrazy-goEDMS
