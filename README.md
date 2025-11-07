@@ -279,4 +279,4 @@ On a representative sample of docs on my laptop is running an ingestion speed ab
 
 ## Deployment
 
-I am currently trialling deployment to a gokrazy instance with https://github.com/drummonds/gokrazy-goEDMS
+I am currently trialling deployment to a gokrazy instance with https://github.com/drummonds/gokrazy-goEDMS.  
