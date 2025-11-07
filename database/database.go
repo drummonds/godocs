@@ -86,19 +86,18 @@ func SetupDatabase(dbType string, connectionString string) DBInterface {
 	var db DBInterface
 
 	switch dbType {
-	case "postgres", "cockroachdb":
-		Logger.Info("Initializing PostgreSQL/CockroachDB database...", "type", dbType)
-		// SetupPostgresDatabase now handles ephemeral instances automatically when connectionString is empty
-		postgresDB, err := SetupPostgresDatabase(connectionString)
+	case "postgres", "cockroachdb", "sqlite":
+		Logger.Info("Initializing database with Bun ORM...", "type", dbType)
+		bunDB, err := SetupBunDatabase(dbType, connectionString)
 		if err != nil {
-			Logger.Error("Unable to create/open PostgreSQL database", "error", err)
+			Logger.Error("Unable to create/open database", "error", err)
 			os.Exit(1)
 		}
-		db = postgresDB
+		db = bunDB
 
 	default:
 		Logger.Error("Unknown database type", "type", dbType)
-		Logger.Info("Supported database types: postgres, cockroachdb")
+		Logger.Info("Supported database types: postgres, cockroachdb, sqlite")
 		os.Exit(1)
 	}
 
