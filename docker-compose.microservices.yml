@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Main goEDMS application (pure Go)
+  goedms:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_TYPE=sqlite
+      - DATABASE_PATH=/data/goedms.db
+      - DOCUMENT_PATH=/documents
+      - INGRESS_PATH=/ingress
+      - NEW_DOCUMENT_FOLDER=New
+      - TESSERACT_SERVICE_URL=http://tesseract-service:8001
+      - PDF_SERVICE_URL=http://pdf-service:8002
+      - WEB_UI_AUTH=false
+    volumes:
+      - ./data:/data
+      - ./documents:/documents
+      - ./ingress:/ingress
+    depends_on:
+      - tesseract-service
+      - pdf-service
+    networks:
+      - goedms-network
+
+  # Tesseract OCR Service
+  tesseract-service:
+    build:
+      context: ./services/tesseract-service
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8001"
+    environment:
+      - PORT=8001
+      - TESSERACT_PATH=/usr/bin/tesseract
+    networks:
+      - goedms-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # PDF Processing Service
+  pdf-service:
+    build:
+      context: ./services/pdf-service
+      dockerfile: Dockerfile
+    ports:
+      - "8002:8002"
+    environment:
+      - PORT=8002
+    networks:
+      - goedms-network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  goedms-network:
+    driver: bridge
+
+volumes:
+  data:
+  documents:
+  ingress:

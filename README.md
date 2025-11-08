@@ -11,6 +11,17 @@ user authentication.
 
 goEDMS is a self-hosted document management system designed for home users to scan, organize, and search receipts, documents, and other files. The focus is on **simplicity, speed, and reliability** rather than enterprise-grade feature complexity.
 
+## Architecture Options
+
+goEDMS now supports two deployment architectures:
+
+1. **Monolithic** (Traditional) - Single application with all dependencies built-in
+2. **Microservices** (Pure Go) - Main application in pure Go with external OCR/PDF services
+
+The microservices architecture allows the main application to be **pure Go with no CGO dependencies**, making it easier to deploy (including to gokrazy). Heavy dependencies like Tesseract OCR and PDF rendering are isolated in separate Docker containers with simple HTTP APIs.
+
+📖 **For microservices setup, see [MICROSERVICES.md](MICROSERVICES.md)**
+
 ### Key Design Principles
 - **Easy Setup**: Works out-of-the-box with ephemeral database for testing
 - **Pure Go**: No external dependencies except PostgreSQL and optional Tesseract OCR

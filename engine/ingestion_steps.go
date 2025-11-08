@@ -217,7 +217,7 @@ func (serverHandler *ServerHandler) extractText(filePath string) (string, error)
 	switch filepath.Ext(filePath) {
 	case ".pdf":
 		// Try direct PDF text extraction first
-		fullText, err := pdfProcessing(filePath)
+		fullText, err := serverHandler.pdfProcessing(filePath)
 		if err != nil || fullText == nil || *fullText == "" {
 			// Fallback to OCR
 			fullText, err = serverHandler.convertToImage(filePath)

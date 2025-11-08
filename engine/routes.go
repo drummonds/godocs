@@ -19,9 +19,10 @@ import (
 
 // ServerHandler will inject the variables needed into routes
 type ServerHandler struct {
-	DB           database.Repository
-	Echo         *echo.Echo
-	ServerConfig config.ServerConfig
+	DB             database.Repository
+	Echo           *echo.Echo
+	ServerConfig   config.ServerConfig
+	ServiceClients *ServiceClients // HTTP clients for external services
 }
 
 /* type Node struct {

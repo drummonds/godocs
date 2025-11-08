@@ -97,7 +97,16 @@ func main() {
 		e.DefaultHTTPErrorHandler(err, c)
 	}
 
-	serverHandler := engine.ServerHandler{DB: db, Echo: e, ServerConfig: serverConfig} //injecting the database into the handler for routes
+	// Initialize service clients for external services (Tesseract, PDF)
+	serviceClients := engine.NewServiceClients(serverConfig.TesseractServiceURL, serverConfig.PDFServiceURL)
+	Logger.Info("Initialized external service clients")
+
+	serverHandler := engine.ServerHandler{
+		DB:             db,
+		Echo:           e,
+		ServerConfig:   serverConfig,
+		ServiceClients: serviceClients,
+	} //injecting the database into the handler for routes
 	Logger.Info("About to initialize schedules")
 	serverHandler.InitializeSchedules(db) //initialize all the cron jobs
 	Logger.Info("Schedules initialized, about to run startup checks")

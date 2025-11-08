@@ -1,22 +1,14 @@
 package engine
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
-	"image"
-	"image/png"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
-	"github.com/disintegration/imaging"
 	"github.com/drummonds/goEDMS/config"
 	"github.com/drummonds/goEDMS/database"
-	"github.com/gen2brain/go-fitz"
-	"github.com/ledongthuc/pdf"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -257,7 +249,7 @@ func (serverHandler *ServerHandler) ingressDocumentWithError(filePath string, so
 
 	switch filepath.Ext(filePath) {
 	case ".pdf":
-		fullText, err := pdfProcessing(filePath)
+		fullText, err := serverHandler.pdfProcessing(filePath)
 		if err != nil {
 			fullText, err = serverHandler.convertToImage(filePath)
 			if err != nil {
@@ -302,7 +294,7 @@ func (serverHandler *ServerHandler) ingressDocument(filePath string, source stri
 
 	switch filepath.Ext(filePath) {
 	case ".pdf":
-		fullText, err := pdfProcessing(filePath)
+		fullText, err := serverHandler.pdfProcessing(filePath)
 		if err != nil {
 			fullText, err = serverHandler.convertToImage(filePath)
 			if err != nil {
@@ -456,24 +448,17 @@ func ingressCleanup(fileName string, document database.Document, serverConfig co
 	return nil
 }
 
-func pdfProcessing(file string) (*string, error) {
+func (serverHandler *ServerHandler) pdfProcessing(file string) (*string, error) {
 	fileName := filepath.Base((file))
-	var fullText string
 	Logger.Debug("Working on current file", "fileName", fileName)
-	pdfFile, result, err := pdf.Open(file)
+
+	// Use PDF service to extract text
+	fullText, err := serverHandler.ServiceClients.CallPDFExtractText(file)
 	if err != nil {
-		Logger.Error("Unable to open PDF", "fileName", fileName)
+		Logger.Error("Unable to extract text from PDF via service", "fileName", fileName, "error", err)
 		return nil, err
 	}
-	defer pdfFile.Close()
-	var buf bytes.Buffer
-	bytes, err := result.GetPlainText()
-	if err != nil {
-		Logger.Error("Unable to convert PDF to text", "fileName", fileName)
-		return nil, err
-	}
-	buf.ReadFrom(bytes)
-	fullText = buf.String() //writing from the buffer to the string
+
 	if fullText == "" {
 		err = errors.New("PDF Text Result is empty")
 		Logger.Info("PDF Text Result is empty, sending to OCR", "fileName", fileName, "error", err)
@@ -493,7 +478,7 @@ func wordDocProcessing(fileName string) {
 
 func (serverHandler *ServerHandler) convertToImage(fileName string) (*string, error) {
 	var err error
-	Logger.Info("Converting PDF To image for OCR using Go libraries", "fileName", fileName)
+	Logger.Info("Converting PDF to image for OCR using PDF service", "fileName", fileName)
 
 	// Create output image path
 	imageName := strings.TrimSuffix(fileName, filepath.Ext(fileName))
@@ -505,104 +490,17 @@ func (serverHandler *ServerHandler) convertToImage(fileName string) (*string, er
 		return nil, err
 	}
 
-	err = os.MkdirAll(filepath.Dir(imageName), os.ModePerm)
-	if err != nil {
-		Logger.Error("Unable to create absolute path for temporary image for OCR (permissions?)", "dir", filepath.Dir(imageName), "error", err)
-		return nil, err
-	}
-
-	fileName = filepath.Clean(fileName)
 	imageName = filepath.Clean(imageName)
 	Logger.Info("Creating temp image for OCR at", "imageName", imageName)
 
-	// Check if file exists and is readable
-	if _, err := os.Stat(fileName); err != nil {
-		Logger.Error("Unable to access PDF file", "fileName", fileName, "error", err)
-		return nil, err
-	}
-
-	// Open PDF document using go-fitz
-	doc, err := fitz.New(fileName)
+	// Use PDF service to convert PDF to image
+	err = serverHandler.ServiceClients.CallPDFToImage(fileName, imageName)
 	if err != nil {
-		Logger.Error("Unable to open PDF document", "fileName", fileName, "error", err)
-		return nil, err
-	}
-	defer doc.Close()
-
-	// Get number of pages
-	numPages := doc.NumPage()
-	Logger.Debug("PDF has pages", "count", numPages)
-
-	var images []image.Image
-
-	// Convert each page to image at 150 DPI
-	for pageNum := 0; pageNum < numPages; pageNum++ {
-		img, err := doc.Image(pageNum)
-		if err != nil {
-			Logger.Error("Unable to render page", "page", pageNum, "error", err)
-			continue
-		}
-		images = append(images, img)
-	}
-
-	if len(images) == 0 {
-		err := fmt.Errorf("no pages could be rendered from PDF")
-		Logger.Error("Failed to render any pages", "fileName", fileName)
+		Logger.Error("Unable to convert PDF to image via service", "fileName", fileName, "error", err)
 		return nil, err
 	}
 
-	// Combine all pages vertically (append)
-	var combinedImage image.Image
-	if len(images) == 1 {
-		combinedImage = images[0]
-	} else {
-		// Calculate total height and max width
-		totalHeight := 0
-		maxWidth := 0
-		for _, img := range images {
-			bounds := img.Bounds()
-			totalHeight += bounds.Dy()
-			if bounds.Dx() > maxWidth {
-				maxWidth = bounds.Dx()
-			}
-		}
-
-		// Create combined image
-		combined := image.NewRGBA(image.Rect(0, 0, maxWidth, totalHeight))
-		currentY := 0
-		for _, img := range images {
-			bounds := img.Bounds()
-			for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
-				for x := bounds.Min.X; x < bounds.Max.X; x++ {
-					combined.Set(x, currentY+y-bounds.Min.Y, img.At(x, y))
-				}
-			}
-			currentY += bounds.Dy()
-		}
-		combinedImage = combined
-	}
-
-	// Resize to 1024px width while maintaining aspect ratio
-	resizedImage := imaging.Resize(combinedImage, 1024, 0, imaging.Lanczos)
-
-	// Apply basic sharpening to improve OCR quality
-	processedImage := imaging.Sharpen(resizedImage, 1.0)
-
-	// Save the processed image
-	outFile, err := os.Create(imageName)
-	if err != nil {
-		Logger.Error("Unable to create output image file", "imageName", imageName, "error", err)
-		return nil, err
-	}
-	defer outFile.Close()
-
-	err = png.Encode(outFile, processedImage)
-	if err != nil {
-		Logger.Error("Unable to encode PNG image", "imageName", imageName, "error", err)
-		return nil, err
-	}
-
-	Logger.Info("Successfully converted PDF to image", "imageName", imageName)
+	Logger.Info("Successfully converted PDF to image via service", "imageName", imageName)
 
 	fullText, err := serverHandler.ocrProcessing(imageName)
 	if err != nil {
@@ -612,53 +510,20 @@ func (serverHandler *ServerHandler) convertToImage(fileName string) (*string, er
 }
 
 func (serverHandler *ServerHandler) ocrProcessing(imageName string) (*string, error) {
-	// Check if Tesseract is configured
-	if serverHandler.ServerConfig.TesseractPath == "" {
-		Logger.Info("Tesseract not configured, skipping OCR processing", "imageName", imageName)
-		emptyText := ""
-		return &emptyText, nil
-	}
+	Logger.Info("Processing OCR via Tesseract service", "imageName", imageName)
 
-	var fullText string
-	var err error
-	textFileName := filepath.Base(imageName)                                    //creating the path for the .txt that tesseract will output with the OCR results.
-	textFileName = strings.TrimSuffix(textFileName, filepath.Ext(textFileName)) //just get the name, no extension
-	fullpath := filepath.Join("temp", textFileName)
-	fullpath, err = filepath.Abs(fullpath)
+	// Use Tesseract service to process OCR
+	fullText, err := serverHandler.ServiceClients.CallOCRService(imageName)
 	if err != nil {
-		Logger.Error("Unable to create full path for temp OCR File", "fullpath", fullpath)
-	}
-	textFileName = filepath.Clean(fullpath)
-	/* 	tempOCRFile, err := os.Create(fmt.Sprintf("temp/%s", imageName))
-	   	if err != nil {
-	   		Logger.Error("Unable to create temp file", "path", fmt.Sprintf("temp/%s", imageName), "error", err)
-	   		return nil, err
-	   	} */
-	tesseractArgs := []string{imageName, textFileName}                                       //outputting ocr to a txt file
-	tesseractCMD := exec.Command(serverHandler.ServerConfig.TesseractPath, tesseractArgs...) //get the path to tesseract
-	var stdBuffer bytes.Buffer
-	mw := io.MultiWriter(os.Stdout, &stdBuffer)
-
-	tesseractCMD.Stdout = mw
-	tesseractCMD.Stderr = mw
-
-	err = tesseractCMD.Run()
-	Logger.Debug("Tesseract Command Run was", "command", tesseractCMD.String())
-	if err != nil {
-		Logger.Warn("Tesseract encountered error when attempting to OCR image, storing document without text", "imageName", imageName, "detail", stdBuffer.String())
+		Logger.Warn("Tesseract service encountered error when attempting to OCR image, storing document without text", "imageName", imageName, "error", err)
 		emptyText := ""
 		return &emptyText, nil // Return empty text instead of error - document should still be saved
 	}
-	fileBytes, err := os.ReadFile(textFileName + ".txt")
-	if err != nil {
-		Logger.Warn("Unable to read OCR output file, storing document without text", "textFile", textFileName+".txt", "error", err)
-		emptyText := ""
-		return &emptyText, nil
-	}
-	fullText = string(fileBytes)
+
 	if fullText == "" {
 		Logger.Info("OCR returned empty string - document may have no recognizable text (e.g., handwritten, blank, or image-only)", "imageName", imageName)
 		// Empty text is valid - return it successfully
 	}
+
 	return &fullText, nil
 }

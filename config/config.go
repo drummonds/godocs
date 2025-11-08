@@ -39,6 +39,8 @@ type ServerConfig struct {
 	ClientPassword       string
 	PushBulletToken      string `json:"-"`
 	TesseractPath        string
+	TesseractServiceURL  string // URL for Tesseract OCR service
+	PDFServiceURL        string // URL for PDF processing service
 	UseReverseProxy      bool
 	BaseURL              string
 	IngressInterval      int
@@ -176,6 +178,11 @@ func SetupServer() (ServerConfig, *slog.Logger) {
 		logger.Warn("Tesseract executable not found, OCR will be disabled", "path", tesseractPathConfig, "error", err)
 		serverConfigLive.TesseractPath = ""
 	}
+
+	// Microservice URLs for OCR and PDF processing
+	serverConfigLive.TesseractServiceURL = getEnv("TESSERACT_SERVICE_URL", "http://tesseract-service:8001")
+	serverConfigLive.PDFServiceURL = getEnv("PDF_SERVICE_URL", "http://pdf-service:8002")
+	logger.Info("Configured external services", "tesseract", serverConfigLive.TesseractServiceURL, "pdf", serverConfigLive.PDFServiceURL)
 
 	// Authentication configuration
 	serverConfigLive.WebUIPass = getEnvBool("WEB_UI_AUTH", false)
