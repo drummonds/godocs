@@ -18,15 +18,13 @@ func TestBunSQLiteDatabase(t *testing.T) {
 		}))
 	}
 
-	// Create a temporary SQLite database file
-	tmpFile := "/tmp/test_goedms_" + ulid.Make().String() + ".db"
-	defer os.Remove(tmpFile)
+	// // Create a temporary SQLite database file
+	// tmpFile := "databases/test_goedms_" + ulid.Make().String() + ".sqlite"
+	// defer os.Remove(tmpFile)
+	tmpFile := ":memory:"
 
 	// Setup Bun with SQLite
-	db, err := SetupBunDatabase("sqlite", tmpFile)
-	if err != nil {
-		t.Fatalf("Failed to setup Bun SQLite database: %v", err)
-	}
+	db := NewRepository(config.ServerConfig{DatabaseType: "sqlite", DatabaseDbname: tmpFile})
 	defer db.Close()
 
 	t.Log("Bun SQLite database setup successfully")

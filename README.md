@@ -60,7 +60,7 @@ goEDMS supports multiple ways to configure the application:
 The easiest way to get started for development:
 
 ```bash
-./goEDMS -dev
+DATABASE_TYPE=ephemeral ./goEDMS
 ```
 
 This starts goEDMS with an ephemeral PostgreSQL database that is automatically created and destroyed when the application exits. Perfect for testing and development!
@@ -123,15 +123,15 @@ Database connection settings are loaded in this order (later overrides earlier):
 
 ### Environment Variables
 
-Database connection options can be set via environment variables using the prefix `GOEDMS_`:
+Database connection options can be set via environment variables:
 
-- `GOEDMS_DATABASE_TYPE` - Database type (postgres)
-- `GOEDMS_DATABASE_HOST` - Database hostname
-- `GOEDMS_DATABASE_PORT` - Database port
-- `GOEDMS_DATABASE_NAME` - Database name
-- `GOEDMS_DATABASE_USER` - Database username
-- `GOEDMS_DATABASE_PASSWORD` - Database password
-- `GOEDMS_DATABASE_SSLMODE` - SSL mode (disable, require, etc.)
+- `DATABASE_TYPE` - Database type (postgres, ephemeral, sqlite, cockroachdb)
+- `DATABASE_HOST` - Database hostname (not needed for ephemeral)
+- `DATABASE_PORT` - Database port (not needed for ephemeral)
+- `DATABASE_NAME` - Database name (not needed for ephemeral)
+- `DATABASE_USER` - Database username (not needed for ephemeral)
+- `DATABASE_PASSWORD` - Database password (not needed for ephemeral)
+- `DATABASE_SSLMODE` - SSL mode (disable, require, etc.)
 
 See `.env.example` for a complete list of available variables.
 
@@ -211,7 +211,7 @@ Deploy to gokrazy with local db
 
 ### Prerequisites
 - Go 1.22 or later
-- PostgreSQL (for production) or use `-dev` flag for ephemeral database
+- PostgreSQL (for production) or use ephemeral database for testing
 - [Task](https://taskfile.dev/installation/) (optional, for build automation)
 - Tesseract OCR (optional, for document OCR)
 
@@ -219,7 +219,7 @@ Deploy to gokrazy with local db
 
 **Development Mode (Ephemeral Database):**
 ```bash
-./goEDMS -dev
+DATABASE_TYPE=ephemeral ./goEDMS
 ```
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
@@ -280,3 +280,7 @@ On a representative sample of docs on my laptop is running an ingestion speed ab
 ## Deployment
 
 I am currently trialling deployment to a gokrazy instance with https://github.com/drummonds/gokrazy-goEDMS.  
+
+## TODO
+
+- [ ] Retest docker deployment after config file change

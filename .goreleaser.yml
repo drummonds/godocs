@@ -55,8 +55,6 @@ nfpms:
       "public/built/**": "/opt/goEDMS/public/built"
       "LICENSE": "/opt/goEDMS/LICENSE"
       "README.md": "/opt/goEDMS/README.md"
-    config_files:
-      "dist-specific-files/Linux/serverConfig.toml": "/opt/goEDMS/serverConfig.toml"
     scripts:
       preinstall: "dist-specific-files/nfpms/pre-install.sh"
       postinstall: "dist-specific-files/nfpms/post-install.sh"

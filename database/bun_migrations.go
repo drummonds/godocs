@@ -8,9 +8,9 @@ import (
 )
 
 // runMigrations runs all Bun migrations
-func (b *BunDB) runMigrations(ctx context.Context) error {
+func runMigrations(ctx context.Context, db *bun.DB) error {
 	// Create a simple migrations tracking table
-	_, err := b.db.ExecContext(ctx, `
+	_, err := db.ExecContext(ctx, `
 		CREATE TABLE IF NOT EXISTS bun_schema_migrations (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			version TEXT NOT NULL UNIQUE,
@@ -27,7 +27,7 @@ func (b *BunDB) runMigrations(ctx context.Context) error {
 		Version       string `bun:"version"`
 	}
 	var applied []AppliedMigration
-	err = b.db.NewSelect().
+	err = db.NewSelect().
 		Model(&applied).
 		Scan(ctx)
 	if err != nil {
@@ -57,12 +57,12 @@ func (b *BunDB) runMigrations(ctx context.Context) error {
 		}
 
 		Logger.Info("Running migration", "version", m.version, "name", m.name)
-		if err := m.up(ctx, b.db); err != nil {
+		if err := m.up(ctx, db); err != nil {
 			return fmt.Errorf("failed to run migration %s: %w", m.version, err)
 		}
 
 		// Mark as applied
-		_, err = b.db.NewInsert().
+		_, err = db.NewInsert().
 			Model(&AppliedMigration{Version: m.version}).
 			Exec(ctx)
 		if err != nil {

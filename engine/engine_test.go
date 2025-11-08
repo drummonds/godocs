@@ -66,7 +66,7 @@ func TestOCRProcessingAndDatabaseStorage(t *testing.T) {
 	}
 	defer ephemeralDB.Close()
 
-	testDB := database.DBInterface(ephemeralDB)
+	testDB := database.Repository(ephemeralDB)
 	defer testDB.Close()
 
 	// Set up server config and logger

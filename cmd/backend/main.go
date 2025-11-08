@@ -62,7 +62,6 @@ func injectGlobals(logger *slog.Logger) {
 
 func main() {
 	// Parse command-line flags
-	devMode := flag.Bool("dev", false, "Run in development mode with ephemeral PostgreSQL")
 	port := flag.String("port", "8000", "Port to run backend server on")
 	flag.Parse()
 
@@ -77,27 +76,21 @@ func main() {
 	serverConfig, logger := config.SetupServer()
 	injectGlobals(logger) //inject the logger into all of the packages
 
-	// Setup database based on dev mode or configuration
-	var db database.DBInterface
-	if *devMode {
-		fmt.Println("🚀  DEVELOPMENT MODE - Ephemeral PostgreSQL")
-		Logger.Info("Starting ephemeral PostgreSQL for development")
-
-		ephemeralDB, err := database.SetupEphemeralPostgresDatabase()
-		if err != nil {
-			Logger.Error("Failed to setup ephemeral database", "error", err)
-			os.Exit(1)
-		}
-		db = database.DBInterface(ephemeralDB)
-		defer ephemeralDB.Close()
-
-		// Write config to ephemeral database
-		database.WriteConfigToDB(serverConfig, db)
-	} else {
-		db = database.SetupDatabase(serverConfig.DatabaseType, serverConfig.DatabaseConnString)
-		Logger.Info("Using configured database", "type", serverConfig.DatabaseType)
+	// Show info banner if using ephemeral database
+	if serverConfig.DatabaseType == "ephemeral" {
+		fmt.Println("🚀  EPHEMERAL DATABASE MODE")
+		fmt.Println("• Database will be destroyed on exit")
+		fmt.Println()
 	}
-	defer db.Close()
+
+	// Setup document repository
+	repo := database.NewRepository(serverConfig)
+	defer repo.Close()
+
+	// Write config to database if it's a fresh ephemeral database
+	if serverConfig.DatabaseType == "ephemeral" {
+		database.WriteConfigToDB(serverConfig, repo)
+	}
 
 	// Initialize Echo
 	e := echo.New()
@@ -124,10 +117,10 @@ func main() {
 		e.DefaultHTTPErrorHandler(err, c)
 	}
 
-	serverHandler := engine.ServerHandler{DB: db, Echo: e, ServerConfig: serverConfig}
+	serverHandler := engine.ServerHandler{DB: repo, Echo: e, ServerConfig: serverConfig}
 	Logger.Info("Initializing backend services...")
-	serverHandler.InitializeSchedules(db) //initialize all the cron jobs
-	serverHandler.StartupChecks()         //Run all the sanity checks
+	serverHandler.InitializeSchedules(repo) //initialize all the cron jobs
+	serverHandler.StartupChecks()           //Run all the sanity checks
 	Logger.Info("Backend services initialized")
 
 	// CORS configuration - allow frontend from different origin

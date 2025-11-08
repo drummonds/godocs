@@ -29,7 +29,7 @@ func setupTestServer(t *testing.T) (*echo.Echo, *engine.ServerHandler, func()) {
 	if err != nil {
 		t.Fatalf("Failed to setup ephemeral database: %v", err)
 	}
-	testDB := database.DBInterface(ephemeralDB)
+	testDB := database.Repository(ephemeralDB)
 	t.Cleanup(func() {
 		ephemeralDB.Close()
 	})

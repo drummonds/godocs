@@ -77,8 +77,8 @@ This architecture follows the Backend-for-Frontend (BFF) pattern, allowing indep
 # Start backend API server
 ./goEDMS-backend --port 8000
 
-# Or with dev mode (ephemeral database)
-./goEDMS-backend --dev
+# Or with ephemeral database
+DATABASE_TYPE=ephemeral ./goEDMS-backend
 ```
 
 **Configuration:**
@@ -197,7 +197,7 @@ Document view routes (serve actual files): `/document/view/:ulid`
 ### Full Stack Development
 ```bash
 # Terminal 1: Run backend with ephemeral DB
-./goEDMS-backend --dev --port 8000
+DATABASE_TYPE=ephemeral ./goEDMS-backend --port 8000
 
 # Terminal 2: Run frontend pointing to backend
 ./goEDMS-frontend --port 3000 --api http://localhost:8000
@@ -209,7 +209,7 @@ Document view routes (serve actual files): `/document/view/:ulid`
 ### Backend API Development
 ```bash
 # Run backend only
-./goEDMS-backend --dev
+DATABASE_TYPE=ephemeral ./goEDMS-backend
 
 # Test API with curl
 curl http://localhost:8000/api/health
@@ -272,13 +272,13 @@ go test ./webapp/... -v
 go test -v .
 
 # Test with ephemeral database
-go test -v . -args --dev
+DATABASE_TYPE=ephemeral go test -v .
 ```
 
 ### API Testing
 ```bash
 # Start backend
-./goEDMS-backend --dev &
+DATABASE_TYPE=ephemeral ./goEDMS-backend &
 
 # Run API tests
 ./test-api.sh  # (create your own test script)

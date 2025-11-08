@@ -20,47 +20,6 @@ When you run goEDMS with PostgreSQL configured but no connection string provided
 3. Runs migrations to set up the schema
 4. Cleans up everything when the application exits
 
-## Configuration
-
-### Using Ephemeral PostgreSQL (Development)
-
-In `config/serverConfig.toml`:
-
-```toml
-[database]
-    Type = "postgres"
-    ConnectionString = ""  # Empty = use ephemeral PostgreSQL
-```
-
-### Using External PostgreSQL (Production)
-
-```toml
-[database]
-    Type = "postgres"
-    ConnectionString = "host=localhost port=5432 user=goedms password=goedms dbname=goedms sslmode=disable"
-```
-
-### Using SQLite (Simple Deployments)
-
-```toml
-[database]
-    Type = "sqlite"
-    ConnectionString = ""
-```
-
-## Running the Application
-
-```bash
-# With ephemeral PostgreSQL (configured as above)
-go run .
-
-# The application will:
-# 1. Start an ephemeral PostgreSQL server
-# 2. Create and migrate the database
-# 3. Start the web server on port 8000
-# 4. Clean up PostgreSQL when you stop the application
-```
-
 ## Testing
 
 ### Unit Tests

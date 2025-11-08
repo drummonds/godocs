@@ -4,116 +4,135 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/drummonds/goEDMS/config"
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/oklog/ulid/v2"
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"github.com/uptrace/bun/dialect/sqlitedialect"
 	"github.com/uptrace/bun/driver/pgdriver"
+	"github.com/uptrace/bun/driver/sqliteshim"
 	"github.com/uptrace/bun/extra/bundebug"
+	"github.com/uptrace/bun/schema"
 )
 
-// BunDB implements DBInterface using Bun ORM
+// BunDB implements Repository using Bun ORM
 type BunDB struct {
-	db         *bun.DB
-	sqlDB      *sql.DB
-	dialect    string // "postgres" or "sqlite"
-	isEmbedded bool
+	db     *bun.DB
+	dbType string
 }
 
-// SetupBunDatabase initializes a Bun database connection
-// dbType: "postgres", "cockroachdb", or "sqlite"
-// connectionString: connection string for postgres/cockroachdb, or file path for sqlite
-func SetupBunDatabase(dbType string, connectionString string) (*BunDB, error) {
-	var sqlDB *sql.DB
-	var err error
-	var dialect string
-	var isEmbedded bool
+// NewRepository initializes the database based on configuration
+func NewRepository(config config.ServerConfig) *BunDB {
+	// databases dir used by sqlite and ephemeral so might as well make for all
+	_, err := os.Stat("databases")
+	if err != nil {
+		if os.IsNotExist(err) {
+			err := os.Mkdir("databases", os.ModePerm)
+			if err != nil {
+				Logger.Error("Unable to create folder for databases", "error", err)
+				os.Exit(1)
+			}
+		}
+	}
 
+	var (
+		db      *bun.DB
+		sqlDB   *sql.DB
+		dialect schema.Dialect
+	)
+
+	dbType := config.DatabaseType
+	if dbType == "ephemeral" {
+		Logger.Info("Starting ephemeral PostgreSQL database for development")
+		_, err := SetupEphemeralPostgresDatabase()
+		if err != nil {
+			Logger.Error("Failed to setup ephemeral database", "error", err)
+			os.Exit(1)
+		}
+		// Run migrations
+		Logger.Info("Running database migrations...")
+		if err := runMigrations(context.Background(), db); err != nil {
+			Logger.Error("failed to ping database", "error", err)
+			os.Exit(1)
+		}
+		Logger.Info("Database migrations completed successfully")
+
+		result := new(BunDB)
+		// result.db = ephemeralDB
+		return result
+	}
 	switch dbType {
 	case "postgres", "cockroachdb":
-		dialect = "postgres"
-
-		if connectionString == "" {
-			// Use ephemeral PostgreSQL for development
-			Logger.Info("No connection string provided, using ephemeral PostgreSQL...")
-			ephemeralDB, err := SetupEphemeralPostgresDatabase()
-			if err != nil {
-				return nil, fmt.Errorf("failed to setup ephemeral postgres: %w", err)
-			}
-			// We'll wrap the ephemeral DB's underlying sql.DB with Bun
-			sqlDB = ephemeralDB.PostgresDB.db
-			isEmbedded = true
-		} else {
-			Logger.Info("Connecting to external PostgreSQL/CockroachDB server...")
-			pgconn := pgdriver.NewConnector(pgdriver.WithDSN(connectionString))
-			sqlDB = sql.OpenDB(pgconn)
-			isEmbedded = false
+		Logger.Info("Initializing postgres database with Bun ORM...", "type", dbType)
+		// Build the connection string for postgres/cockroachdb
+		userpw := config.DatabaseUser
+		if config.DatabasePassword != "" {
+			userpw += fmt.Sprintf(":%s", config.DatabasePassword)
 		}
+		// eg postgres://user:password@localhost:5432/dbname?sslmode=disable
+		connectionString := fmt.Sprintf("%s://%s@%s:%s/%s?sslmode=%s",
+			config.DatabaseType, userpw, config.DatabaseHost, config.DatabasePort, config.DatabaseDbname, config.DatabaseSslmode)
+		Logger.Info("Bun connection strings", "connectionString", connectionString)
+		sqlDB = sql.OpenDB(pgdriver.NewConnector(pgdriver.WithDSN(connectionString)))
+		// Test connection
+		if err := sqlDB.Ping(); err != nil {
+			Logger.Error("failed to ping database", "error", err)
+			os.Exit(1)
+		}
+
+		dialect = pgdialect.New()
 
 	case "sqlite":
-		dialect = "sqlite"
-		isEmbedded = true
-
-		if connectionString == "" {
-			connectionString = "databases/goedms.db"
+		Logger.Info("Initializing sqlite database with Bun ORM...", "type", dbType)
+		// Build the connection string for postgres/cockroachdb
+		// eg "file:test.db?cache=shared&mode=rwc"
+		dbName := config.DatabaseDbname
+		if dbName == "" {
+			dbName = "goEDMS"
 		}
+		// connectionString := "file:databases/test.sqlite:?cache=shared&mode=rwc"
+		// connectionString := "file::memory:?cache=shared&mode=rwc"
+		connectionString := fmt.Sprintf("file:%s?cache=shared&mode=rwc",
+			config.DatabaseDbname)
+		Logger.Info("Bun connection strings", "connectionString", connectionString)
+		sqlDB, err = sql.Open(sqliteshim.ShimName, connectionString)
 
-		Logger.Info("Connecting to SQLite database", "path", connectionString)
-		sqlDB, err = sql.Open("sqlite3", connectionString+"?_journal_mode=WAL&_timeout=5000")
-		if err != nil {
-			return nil, fmt.Errorf("failed to open SQLite database: %w", err)
-		}
+		dialect = sqlitedialect.New()
 
 	default:
-		return nil, fmt.Errorf("unsupported database type: %s (supported: postgres, cockroachdb, sqlite)", dbType)
+		Logger.Error("Unknown database type", "type", dbType)
+		Logger.Info("Supported database types: ephemeral, postgres, cockroachdb, sqlite")
+		os.Exit(1)
 	}
 
-	// Test connection
-	if err := sqlDB.Ping(); err != nil {
-		return nil, fmt.Errorf("failed to ping database: %w", err)
-	}
-
-	// Create Bun DB instance
-	var bunDB *bun.DB
-	if dialect == "postgres" {
-		bunDB = bun.NewDB(sqlDB, pgdialect.New())
-	} else {
-		bunDB = bun.NewDB(sqlDB, sqlitedialect.New())
-	}
-
-	// Add query hook for debugging (only in development)
-	bunDB.AddQueryHook(bundebug.NewQueryHook(
-		bundebug.WithVerbose(false), // Set to true for verbose logging
-	))
-
+	db = bun.NewDB(sqlDB, dialect)
+	// Option to turn on verbose logging just returns failures otherwise
+	db.AddQueryHook(bundebug.NewQueryHook((bundebug.WithVerbose(false))))
 	Logger.Info("Connected to database successfully", "type", dbType)
-
-	bunDBInstance := &BunDB{
-		db:         bunDB,
-		sqlDB:      sqlDB,
-		dialect:    dialect,
-		isEmbedded: isEmbedded,
-	}
 
 	// Run migrations
 	Logger.Info("Running database migrations...")
-	if err := bunDBInstance.runMigrations(context.Background()); err != nil {
-		Logger.Error("Failed to run database migrations", "error", err)
-		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	if err := runMigrations(context.Background(), db); err != nil {
+		Logger.Error("failed to ping database", "error", err)
+		os.Exit(1)
 	}
 	Logger.Info("Database migrations completed successfully")
 
-	return bunDBInstance, nil
+	result := new(BunDB)
+	result.db = db
+	result.dbType = dbType
+	return result
 }
 
-// Close closes the database connection
+// Close closes the database connection and stops embedded server if running
 func (b *BunDB) Close() error {
 	if b.db != nil {
-		return b.db.Close()
+		if err := b.db.Close(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -435,7 +454,7 @@ func (b *BunDB) SearchDocuments(searchTerm string) ([]Document, error) {
 	ctx := context.Background()
 	var bunDocs []BunDocument
 
-	if b.dialect == "postgres" {
+	if b.dbType == "postgres" || b.dbType == "cockroachdb" {
 		// Use PostgreSQL full-text search
 		formattedTerm := formatSearchTerm(searchTerm)
 
@@ -469,9 +488,9 @@ func (b *BunDB) SearchDocuments(searchTerm string) ([]Document, error) {
 func (b *BunDB) ReindexSearchDocuments() (int, error) {
 	ctx := context.Background()
 
-	if b.dialect == "postgres" {
-		// PostgreSQL: Update full_text_search column
+	if b.dbType == "postgres" || b.dbType == "cockroachdb" {
 		result, err := b.db.NewUpdate().
+			// PostgreSQL: Update full_text_search column
 			Model((*BunDocument)(nil)).
 			Set("full_text_search = to_tsvector('english', COALESCE(full_text, '') || ' ' || COALESCE(name, ''))").
 			Where("full_text IS NOT NULL AND full_text != ''").
@@ -836,7 +855,7 @@ func (b *BunDB) UpdateWordFrequencies(docID string) error {
 	// Update word frequencies in database
 	for word, count := range frequencies {
 		// Use INSERT ... ON CONFLICT for upsert
-		if b.dialect == "postgres" {
+		if b.dbType == "postgres" || b.dbType == "cockroachdb" {
 			_, err := b.db.NewRaw(`
 				INSERT INTO word_frequencies (word, frequency, last_updated)
 				VALUES (?, ?, CURRENT_TIMESTAMP)

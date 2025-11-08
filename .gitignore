@@ -10,16 +10,23 @@ dist
 public/built/frontend-config.*
 database.txt
 .devcontainer
-.vscode
 notes.txt
 databases
 staging
+
+# Development
+.vscode
+.claude
+.task
 
 # goEDMS bits
 goedms.log
 goEDMS.db.lock
 goEDMS.db
+test_output.log
 
 # Files for local testing
 .env
 demo
+test_goedms*
+

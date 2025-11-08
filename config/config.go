@@ -20,8 +20,13 @@ type ServerConfig struct {
 	StormID              int `storm:"id"`
 	ListenAddrIP         string
 	ListenAddrPort       string
-	DatabaseType         string // "postgres" or "cockroachdb"
-	DatabaseConnString   string // PostgreSQL/CockroachDB connection string
+	DatabaseType         string
+	DatabaseHost         string
+	DatabasePort         string
+	DatabaseUser         string
+	DatabasePassword     string
+	DatabaseDbname       string
+	DatabaseSslmode      string
 	IngressPath          string
 	IngressDelete        bool
 	IngressMoveFolder    string
@@ -80,61 +85,6 @@ func getEnvInt(key string, defaultValue int) int {
 	return intVal
 }
 
-// buildDatabaseConnectionString builds a PostgreSQL connection string
-func buildDatabaseConnectionString(logger *slog.Logger) string {
-	// If a full connection string is provided, use it directly
-	if connStr := getEnv("DATABASE_CONNECTION_STRING", ""); connStr != "" {
-		logger.Info("Using provided database connection string")
-		return connStr
-	}
-
-	// Build connection string from individual components
-	host := getEnv("DATABASE_HOST", "")
-	port := getEnv("DATABASE_PORT", "")
-	user := getEnv("DATABASE_USER", "")
-	password := getEnv("DATABASE_PASSWORD", "")
-	dbname := getEnv("DATABASE_NAME", "")
-	sslmode := getEnv("DATABASE_SSLMODE", "")
-
-	// If no individual components are set, return empty string
-	if host == "" && port == "" && user == "" && dbname == "" {
-		logger.Info("No database connection details provided, will use default behavior")
-		return ""
-	}
-
-	// Set defaults for missing values
-	if host == "" {
-		host = "localhost"
-	}
-	if port == "" {
-		port = "5432"
-	}
-	if user == "" {
-		user = "goedms"
-	}
-	if dbname == "" {
-		dbname = "goedms"
-	}
-	if sslmode == "" {
-		sslmode = "disable"
-	}
-
-	// Build the connection string
-	connStr := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=%s",
-		host, port, user, dbname, sslmode)
-
-	// Add password if provided
-	if password != "" {
-		connStr = fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-			host, port, user, password, dbname, sslmode)
-	}
-
-	logger.Info("Built database connection string from components",
-		"host", host, "port", port, "user", user, "dbname", dbname)
-
-	return connStr
-}
-
 // SetupServer loads configuration and returns ServerConfig and Logger
 func SetupServer() (ServerConfig, *slog.Logger) {
 	serverConfigLive := ServerConfig{}
@@ -155,7 +105,13 @@ func SetupServer() (ServerConfig, *slog.Logger) {
 
 	// Database configuration
 	serverConfigLive.DatabaseType = getEnv("DATABASE_TYPE", "postgres")
-	serverConfigLive.DatabaseConnString = buildDatabaseConnectionString(logger)
+	serverConfigLive.DatabaseHost = getEnv("DATABASE_HOST", "localhost")
+	serverConfigLive.DatabasePort = getEnv("DATABASE_PORT", "5432")
+	serverConfigLive.DatabaseUser = getEnv("DATABASE_USER", "goedms")
+	serverConfigLive.DatabasePassword = getEnv("DATABASE_PASSWORD", "")
+	serverConfigLive.DatabaseDbname = getEnv("DATABASE_NAME", "goedms")
+	serverConfigLive.DatabaseSslmode = getEnv("DATABASE_SSLMODE", "")
+
 	logger.Info("Database configuration loaded", "type", serverConfigLive.DatabaseType)
 
 	// Ingress configuration

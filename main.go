@@ -1,7 +1,6 @@
 package main
 
 import (
-	"flag"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -29,41 +28,25 @@ func injectGlobals(logger *slog.Logger) {
 }
 
 func main() {
-	// Parse command-line flags
-	devMode := flag.Bool("dev", false, "Run in development mode with ephemeral PostgreSQL")
-	flag.Parse()
-
 	serverConfig, logger := config.SetupServer()
 	injectGlobals(logger) //inject the logger into all of the packages
 
-	// Setup database based on dev mode or configuration
-	var db database.DBInterface
-	if *devMode {
+	// Show info banner if using ephemeral database
+	if serverConfig.DatabaseType == "ephemeral" {
 		fmt.Println("\n" + strings.Repeat("=", 50))
-		fmt.Println("🚀  DEVELOPMENT MODE - Ephemeral PostgreSQL")
+		fmt.Println("🚀  EPHEMERAL DATABASE MODE")
 		fmt.Println(strings.Repeat("=", 50))
 		fmt.Println("• Database will be destroyed on exit")
 		fmt.Println("• Perfect for testing and development")
 		fmt.Println("• No persistent data storage")
 		fmt.Println(strings.Repeat("=", 50) + "\n")
-
-		Logger.Info("Starting ephemeral PostgreSQL for development")
-		ephemeralDB, err := database.SetupEphemeralPostgresDatabase()
-		if err != nil {
-			Logger.Error("Failed to setup ephemeral PostgreSQL", "error", err)
-			os.Exit(1)
-		}
-		db = ephemeralDB
-		// Ensure cleanup happens on exit
-		defer func() {
-			Logger.Info("Shutting down ephemeral PostgreSQL...")
-			ephemeralDB.Close()
-		}()
-	} else {
-		Logger.Info("About to setup database", "type", serverConfig.DatabaseType)
-		db = database.SetupDatabase(serverConfig.DatabaseType, serverConfig.DatabaseConnString)
-		defer db.Close()
 	}
+
+	// Setup database (handles ephemeral, postgres, cockroachdb, sqlite)
+	Logger.Info("Setting up database", "type", serverConfig.DatabaseType)
+	db := database.NewRepository(serverConfig)
+	defer db.Close()
+
 	Logger.Info("Database setup complete")
 	database.WriteConfigToDB(serverConfig, db) //writing the config to the database
 	Logger.Info("Config written to DB")
@@ -84,9 +67,9 @@ func main() {
 			if strings.HasPrefix(c.Request().URL.Path, "/api/") {
 				// Return JSON for API endpoints
 				c.JSON(http.StatusNotFound, map[string]string{
-					"error": "Not Found",
+					"error":   "Not Found",
 					"message": "The requested API endpoint does not exist",
-					"path": c.Request().URL.Path,
+					"path":    c.Request().URL.Path,
 				})
 				return
 			}

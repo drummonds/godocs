@@ -9,7 +9,7 @@ import (
 	"github.com/stapelberg/postgrestest"
 )
 
-// EphemeralPostgresDB implements DBInterface using ephemeral PostgreSQL
+// EphemeralPostgresDB implements Repository using ephemeral PostgreSQL
 type EphemeralPostgresDB struct {
 	*PostgresDB
 	server *postgrestest.Server

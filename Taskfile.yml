@@ -46,17 +46,24 @@ tasks:
   build:
     desc: Build the application
     deps: [build:wasm, openapi]
+    vars:
+      VERSION:
+        sh: git describe --tags --always 2>/dev/null || echo "dev"
     cmds:
-      - echo "Building backend..."
+      - "echo 'Building backend...'"
       - mkdir -p {{.BUILD_DIR}}
-      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} main.go
-      - echo "Build complete! Binary at {{.BUILD_DIR}}/{{.BINARY_NAME}}"
+      - "go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags=\"-X 'main.Version={{.VERSION}}'\" main.go"
+      - "echo 'Build complete! Binary at {{.BUILD_DIR}}/{{.BINARY_NAME}} (version {{.VERSION}})'"
 
   build:backend:
     desc: Build only the backend
+    vars:
+      VERSION:
+        sh: git describe --tags --always 2>/dev/null || echo "dev"
     cmds:
       - mkdir -p {{.BUILD_DIR}}
-      - go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} main.go
+      - "go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags=\"-X 'main.Version={{.VERSION}}'\" main.go"
+      - "echo 'Backend build complete! Version: {{.VERSION}}'"
 
   build:wasm:
     desc: Build the WebAssembly application

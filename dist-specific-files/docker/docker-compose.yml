@@ -11,7 +11,6 @@ services:
         - /sourcedir/done:/opt/goEDMS/done
         - /sourcedir/tmp:/opt/goEDMS/temp
         - /sourcedir/ingress:/opt/goEDMS/ingress
-        - /sourcedir/serverConfig.toml:/opt/goEDMS/serverConfig.toml
         - /sourcedir/goedms.log:/opt/goEDMS/goedms.log
         - /sourcedir/db:/opt/goEDMS/databases
       environment:

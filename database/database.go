@@ -13,7 +13,7 @@ import (
 	"path/filepath"
 	"time"
 
-	config "github.com/drummonds/goEDMS/config"
+	"github.com/drummonds/goEDMS/config"
 	"github.com/oklog/ulid/v2"
 )
 
@@ -34,8 +34,8 @@ type Document struct {
 // Logger is global since we will need it everywhere
 var Logger *slog.Logger
 
-// DBInterface defines database operations
-type DBInterface interface {
+// Repository defines database operations
+type Repository interface {
 	Close() error
 	SaveDocument(doc *Document) error
 	GetDocumentByID(id int) (*Document, error)
@@ -70,42 +70,8 @@ type DBInterface interface {
 	DeleteOldJobs(olderThan time.Duration) (int, error)
 }
 
-// SetupDatabase initializes the database based on configuration
-func SetupDatabase(dbType string, connectionString string) DBInterface {
-	_, err := os.Stat("databases")
-	if err != nil {
-		if os.IsNotExist(err) {
-			err := os.Mkdir("databases", os.ModePerm)
-			if err != nil {
-				Logger.Error("Unable to create folder for databases", "error", err)
-				os.Exit(1)
-			}
-		}
-	}
-
-	var db DBInterface
-
-	switch dbType {
-	case "postgres", "cockroachdb", "sqlite":
-		Logger.Info("Initializing database with Bun ORM...", "type", dbType)
-		bunDB, err := SetupBunDatabase(dbType, connectionString)
-		if err != nil {
-			Logger.Error("Unable to create/open database", "error", err)
-			os.Exit(1)
-		}
-		db = bunDB
-
-	default:
-		Logger.Error("Unknown database type", "type", dbType)
-		Logger.Info("Supported database types: postgres, cockroachdb, sqlite")
-		os.Exit(1)
-	}
-
-	return db
-}
-
 // FetchConfigFromDB pulls the server config from the database
-func FetchConfigFromDB(db DBInterface) (config.ServerConfig, error) {
+func FetchConfigFromDB(db Repository) (config.ServerConfig, error) {
 	serverConfig, err := db.GetConfig()
 	if err != nil {
 		Logger.Error("Unable to fetch server config from db", "error", err)
@@ -115,7 +81,7 @@ func FetchConfigFromDB(db DBInterface) (config.ServerConfig, error) {
 }
 
 // WriteConfigToDB writes the serverconfig to the database for later retrieval
-func WriteConfigToDB(serverConfig config.ServerConfig, db DBInterface) {
+func WriteConfigToDB(serverConfig config.ServerConfig, db Repository) {
 	serverConfig.StormID = 1 // config will be stored in bucket 1
 	fmt.Printf("%+v\n", serverConfig)
 	err := db.SaveConfig(&serverConfig)
@@ -125,7 +91,7 @@ func WriteConfigToDB(serverConfig config.ServerConfig, db DBInterface) {
 }
 
 // AddNewDocument adds a new document to the database
-func AddNewDocument(filePath string, fullText string, db DBInterface) (*Document, error) {
+func AddNewDocument(filePath string, fullText string, db Repository) (*Document, error) {
 	serverConfig, err := FetchConfigFromDB(db)
 	if err != nil {
 		Logger.Error("Unable to fetch config to add new document", "filePath", filePath, "error", err)
@@ -182,7 +148,7 @@ func AddNewDocument(filePath string, fullText string, db DBInterface) (*Document
 }
 
 // FetchNewestDocuments fetches the documents that were added last
-func FetchNewestDocuments(numberOf int, db DBInterface) ([]Document, error) {
+func FetchNewestDocuments(numberOf int, db Repository) ([]Document, error) {
 	newestDocuments, err := db.GetNewestDocuments(numberOf)
 	if err != nil {
 		Logger.Error("Unable to find the latest documents", "error", err)
@@ -192,7 +158,7 @@ func FetchNewestDocuments(numberOf int, db DBInterface) ([]Document, error) {
 }
 
 // FetchAllDocuments fetches all the documents in the database
-func FetchAllDocuments(db DBInterface) (*[]Document, error) {
+func FetchAllDocuments(db Repository) (*[]Document, error) {
 	allDocuments, err := db.GetAllDocuments()
 	if err != nil {
 		Logger.Error("Unable to find the latest documents", "error", err)
@@ -202,7 +168,7 @@ func FetchAllDocuments(db DBInterface) (*[]Document, error) {
 }
 
 // FetchDocuments fetches an array of documents // TODO: Not fucking needed?
-func FetchDocuments(docULIDSt []string, db DBInterface) ([]Document, int, error) {
+func FetchDocuments(docULIDSt []string, db Repository) ([]Document, int, error) {
 	var foundDocuments []Document
 	for _, ulidStr := range docULIDSt {
 		tempDocument, err := db.GetDocumentByULID(ulidStr)
@@ -216,7 +182,7 @@ func FetchDocuments(docULIDSt []string, db DBInterface) ([]Document, int, error)
 }
 
 // UpdateDocumentField updates a single field in a document
-func UpdateDocumentField(docULIDSt string, field string, newValue interface{}, db DBInterface) (int, error) {
+func UpdateDocumentField(docULIDSt string, field string, newValue interface{}, db Repository) (int, error) {
 	var err error
 
 	// Handle specific field updates using type-safe methods
@@ -245,7 +211,7 @@ func UpdateDocumentField(docULIDSt string, field string, newValue interface{}, d
 }
 
 // FetchDocument fetches the requested document by ULID
-func FetchDocument(docULIDSt string, db DBInterface) (Document, int, error) {
+func FetchDocument(docULIDSt string, db Repository) (Document, int, error) {
 	fmt.Println("UUID STRING: ", docULIDSt)
 	foundDocument, err := db.GetDocumentByULID(docULIDSt)
 	if err != nil {
@@ -260,7 +226,7 @@ func FetchDocument(docULIDSt string, db DBInterface) (Document, int, error) {
 }
 
 // FetchDocumentFromPath fetches the document by document path
-func FetchDocumentFromPath(path string, db DBInterface) (Document, error) {
+func FetchDocumentFromPath(path string, db Repository) (Document, error) {
 	path = filepath.ToSlash(path) // converting to slash before search
 	foundDocument, err := db.GetDocumentByPath(path)
 	if err != nil {
@@ -271,7 +237,7 @@ func FetchDocumentFromPath(path string, db DBInterface) (Document, error) {
 }
 
 // FetchFolder grabs all of the documents contained in a folder
-func FetchFolder(folderName string, db DBInterface) ([]Document, error) {
+func FetchFolder(folderName string, db Repository) ([]Document, error) {
 	folderContents, err := db.GetDocumentsByFolder(folderName) // TODO limit this?
 	if err != nil {
 		Logger.Error("Unable to find the requested folder", "error", err)
@@ -281,7 +247,7 @@ func FetchFolder(folderName string, db DBInterface) ([]Document, error) {
 }
 
 // DeleteDocument fetches the requested document by ULID
-func DeleteDocument(docULIDSt string, db DBInterface) error {
+func DeleteDocument(docULIDSt string, db Repository) error {
 	err := db.DeleteDocument(docULIDSt)
 	if err != nil {
 		Logger.Error("Unable to delete requested document", "error", err)
@@ -290,8 +256,7 @@ func DeleteDocument(docULIDSt string, db DBInterface) error {
 	return nil
 }
 
-
-func checkDuplicateDocument(fileHash string, fileName string, db DBInterface) bool { // TODO: Check for duplicates before you do a shit ton of processing, why wasn't this obvious?
+func checkDuplicateDocument(fileHash string, fileName string, db Repository) bool { // TODO: Check for duplicates before you do a shit ton of processing, why wasn't this obvious?
 	document, err := db.GetDocumentByHash(fileHash)
 	if err != nil || document == nil {
 		Logger.Info("No record found, assume no duplicate hash", "error", err)

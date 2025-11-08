@@ -16,7 +16,7 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-// PostgresDB implements DBInterface for PostgreSQL
+// PostgresDB implements Repository for PostgreSQL
 type PostgresDB struct {
 	db         *sql.DB
 	isEmbedded bool // Now refers to ephemeral instances

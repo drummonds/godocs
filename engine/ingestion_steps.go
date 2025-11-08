@@ -16,7 +16,7 @@ import (
 // Step 1: Calculate hash and create initial database record
 // Step 2: Move file to documents folder and verify hash
 // Step 3: Extract text and update search/wordcloud
-func (serverHandler *ServerHandler) IngestDocumentWithSteps(filePath string, db database.DBInterface, jobID ulid.ULID, fileNum, totalFiles int) error {
+func (serverHandler *ServerHandler) IngestDocumentWithSteps(filePath string, db database.Repository, jobID ulid.ULID, fileNum, totalFiles int) error {
 	fileName := filepath.Base(filePath)
 	baseProgress := int((float64(fileNum) / float64(totalFiles)) * 90) // Reserve 90% for file processing, 10% for final steps
 
@@ -114,7 +114,7 @@ func calculateFileHash(filePath string) (string, error) {
 }
 
 // checkDuplicate checks if a document with the same hash already exists
-func (serverHandler *ServerHandler) checkDuplicate(fileHash string, fileName string, db database.DBInterface) (bool, *database.Document) {
+func (serverHandler *ServerHandler) checkDuplicate(fileHash string, fileName string, db database.Repository) (bool, *database.Document) {
 	document, err := db.GetDocumentByHash(fileHash)
 	if err != nil || document == nil {
 		return false, nil
@@ -124,7 +124,7 @@ func (serverHandler *ServerHandler) checkDuplicate(fileHash string, fileName str
 }
 
 // createInitialDocument creates a minimal document record with hash
-func (serverHandler *ServerHandler) createInitialDocument(filePath string, fileHash string, db database.DBInterface) (*database.Document, error) {
+func (serverHandler *ServerHandler) createInitialDocument(filePath string, fileHash string, db database.Repository) (*database.Document, error) {
 	serverConfig, err := database.FetchConfigFromDB(db)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch config: %w", err)
@@ -259,7 +259,7 @@ func (serverHandler *ServerHandler) extractText(filePath string) (string, error)
 }
 
 // updateDocumentText updates the document with extracted text
-func (serverHandler *ServerHandler) updateDocumentText(doc *database.Document, fullText string, db database.DBInterface) error {
+func (serverHandler *ServerHandler) updateDocumentText(doc *database.Document, fullText string, db database.Repository) error {
 	_, err := database.UpdateDocumentField(doc.ULID.String(), "FullText", fullText, db)
 	if err != nil {
 		return fmt.Errorf("unable to update full text: %w", err)

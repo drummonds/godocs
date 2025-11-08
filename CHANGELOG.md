@@ -2,7 +2,11 @@
 
 All notable changes to goEDMS will be documented in this file.
 
-## 0.8.0 (Unreleased)
+## 0.9.0 2025-11-07
+
+- Convert to bun so that can use both sqlite and postgres
+
+## 0.8.0
 
 ### Added
 - **Word Cloud Visualization**: Automatic word frequency analysis for all documents

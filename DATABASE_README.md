@@ -4,33 +4,16 @@ goEDMS now supports multiple database backends to provide flexibility for differ
 
 ## Supported Databases
 
-- **SQLite** (default) - Simple, embedded database, great for single-user deployments
-- **PostgreSQL** - Production-grade relational database with embedded option
+- **SQLite** - Simple, embedded database, great for single-user deployments
+- **PostgreSQL** (default) - Production-grade relational database with embedded option
 - **CockroachDB** - Distributed SQL database for high-availability deployments
 
 ## Configuration
 
-Database settings are configured in `config/serverConfig.toml`:
+Database settings are configured in .env or environment varibles.  See .env.example
 
-```toml
-[database]
-    # Database type: "sqlite", "postgres", or "cockroachdb"
-    Type = "sqlite"
-    
-    # PostgreSQL/CockroachDB connection string (leave empty to use embedded PostgreSQL)
-    ConnectionString = ""
-```
 
 ## SQLite (Default)
-
-**Best for:** Single-user installations, development, testing
-
-**Configuration:**
-```toml
-[database]
-    Type = "sqlite"
-    ConnectionString = ""
-```
 
 **Features:**
 - No external dependencies
@@ -40,16 +23,7 @@ Database settings are configured in `config/serverConfig.toml`:
 
 ## PostgreSQL
 
-**Best for:** Multi-user deployments, production environments, need for advanced SQL features
-
 ### Option 1: Embedded PostgreSQL (Recommended for Easy Setup)
-
-**Configuration:**
-```toml
-[database]
-    Type = "postgres"
-    ConnectionString = ""  # Leave empty for embedded mode
-```
 
 **Features:**
 - **Persistent data storage on disk** - Your data is saved between restarts
@@ -95,13 +69,6 @@ This is useful for:
 
 ### Option 2: External PostgreSQL Server
 
-**Configuration:**
-```toml
-[database]
-    Type = "postgres"
-    ConnectionString = "host=localhost port=5432 user=goedms password=yourpassword dbname=goedms sslmode=disable"
-```
-
 **Setup Steps:**
 
 1. Install PostgreSQL on your system or server
@@ -111,7 +78,7 @@ This is useful for:
    CREATE USER goedms WITH PASSWORD 'yourpassword';
    GRANT ALL PRIVILEGES ON DATABASE goedms TO goedms;
    ```
-3. Update the connection string in `serverConfig.toml`
+3. Update configuration
 4. Start goEDMS - migrations will run automatically
 
 **Connection String Format:**
@@ -129,14 +96,6 @@ host=<hostname> port=<port> user=<username> password=<password> dbname=<database
 
 ## CockroachDB
 
-**Best for:** Distributed deployments, high availability, horizontal scalability
-
-**Configuration:**
-```toml
-[database]
-    Type = "cockroachdb"
-    ConnectionString = "host=localhost port=26257 user=root dbname=goedms sslmode=require"
-```
 
 **Setup Steps:**
 
@@ -145,7 +104,7 @@ host=<hostname> port=<port> user=<username> password=<password> dbname=<database
    ```sql
    CREATE DATABASE goedms;
    ```
-3. Update connection string in `serverConfig.toml`
+3. Update connection settings
 4. Start goEDMS - migrations will run automatically
 
 **Notes:**
@@ -228,38 +187,6 @@ To migrate data between databases:
 3. Delete database and start fresh
 4. Check logs in `goedms.log` for detailed error
 
-### Performance Issues
-
-For SQLite:
-- Consider switching to PostgreSQL for multi-user scenarios
-- SQLite is single-writer, PostgreSQL supports concurrent writes
-
-For PostgreSQL:
-- Check `databases/postgres_data/postgresql.log` for slow queries
-- Consider adding indexes for frequently searched fields
-- Tune PostgreSQL configuration for your workload
-
-## Schema Information
-
-goEDMS uses migrations to manage database schema:
-
-- **Migration 000001**: SQLite schema (auto-increment IDs, SQLite-specific syntax)
-- **Migration 000002**: PostgreSQL schema (SERIAL IDs, triggers, functions)
-
-Migrations are automatically applied on startup based on the configured database type.
-
-## Performance Considerations
-
-| Feature | SQLite | PostgreSQL | CockroachDB |
-|---------|--------|-----------|-------------|
-| Single user | ⭐⭐⭐ | ⭐⭐ | ⭐ |
-| Multiple users | ⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
-| Large datasets | ⭐⭐ | ⭐⭐⭐ | ⭐⭐⭐ |
-| Setup complexity | ⭐⭐⭐ | ⭐⭐ | ⭐ |
-| Resource usage | ⭐⭐⭐ | ⭐⭐ | ⭐ |
-| High availability | ❌ | Limited | ⭐⭐⭐ |
-| Geo-distribution | ❌ | ❌ | ⭐⭐⭐ |
-
 ## Backup and Recovery
 
 ### SQLite Backup
@@ -302,10 +229,3 @@ pg_dump -h localhost -U goedms goedms > goedms_backup.sql
 ```sql
 BACKUP DATABASE goedms TO 'nodelocal://1/goedms_backup';
 ```
-
-## Recommendations
-
-- **Development/Testing:** SQLite (default) - zero configuration
-- **Single-user Production:** Embedded PostgreSQL - better performance, no setup
-- **Multi-user Production:** External PostgreSQL - full control, tuning, backups
-- **Enterprise/Distributed:** CockroachDB - high availability, geo-replication

@@ -93,7 +93,7 @@ func runFrontendRenderingTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to setup ephemeral database: %v", err)
 	}
-	db := database.DBInterface(ephemeralDB)
+	db := database.Repository(ephemeralDB)
 	defer ephemeralDB.Close()
 	defer db.Close()
 
@@ -251,7 +251,7 @@ func runTestWithCurl(t *testing.T) error {
 	if err != nil {
 		t.Fatalf("Failed to setup ephemeral database: %v", err)
 	}
-	db := database.DBInterface(ephemeralDB)
+	db := database.Repository(ephemeralDB)
 	defer ephemeralDB.Close()
 	defer db.Close()
 
@@ -402,7 +402,7 @@ func runIngressStartupTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to setup ephemeral database: %v", err)
 	}
-	db := database.DBInterface(ephemeralDB)
+	db := database.Repository(ephemeralDB)
 	defer ephemeralDB.Close()
 	defer db.Close()
 
@@ -580,7 +580,7 @@ func runRootEndpointTest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to setup ephemeral database: %v", err)
 	}
-	db := database.DBInterface(ephemeralDB)
+	db := database.Repository(ephemeralDB)
 	defer ephemeralDB.Close()
 	defer db.Close()
 
@@ -727,7 +727,7 @@ func TestAboutPageWithChromedp(t *testing.T) {
 		t.Fatalf("Failed to setup ephemeral database: %v", err)
 	}
 	t.Log("Ephemeral database created successfully")
-	db := database.DBInterface(ephemeralDB)
+	db := database.Repository(ephemeralDB)
 	defer ephemeralDB.Close()
 	defer db.Close()
 

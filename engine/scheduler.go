@@ -12,7 +12,7 @@ import (
 var Logger *slog.Logger
 
 // InitializeSchedules starts all the cron jobs (currently just one)
-func (serverHandler *ServerHandler) InitializeSchedules(db database.DBInterface) {
+func (serverHandler *ServerHandler) InitializeSchedules(db database.Repository) {
 	serverConfig, err := database.FetchConfigFromDB(db)
 	if err != nil {
 		fmt.Println("Error reading db when initializing")

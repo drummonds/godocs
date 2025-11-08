@@ -20,7 +20,7 @@ import (
 	"github.com/oklog/ulid/v2"
 )
 
-func (serverHandler *ServerHandler) ingressJobFunc(serverConfig config.ServerConfig, db database.DBInterface) {
+func (serverHandler *ServerHandler) ingressJobFunc(serverConfig config.ServerConfig, db database.Repository) {
 	// Add panic recovery to prevent entire application crash
 	defer func() {
 		if r := recover(); r != nil {
@@ -62,7 +62,7 @@ func (serverHandler *ServerHandler) ingressJobFunc(serverConfig config.ServerCon
 }
 
 // ingressJobFuncWithTracking wraps the ingress job with progress tracking
-func (serverHandler *ServerHandler) ingressJobFuncWithTracking(serverConfig config.ServerConfig, db database.DBInterface, jobID ulid.ULID) {
+func (serverHandler *ServerHandler) ingressJobFuncWithTracking(serverConfig config.ServerConfig, db database.Repository, jobID ulid.ULID) {
 	// Add panic recovery and update job status on panic
 	defer func() {
 		if r := recover(); r != nil {
@@ -154,7 +154,7 @@ func (serverHandler *ServerHandler) ingressJobFuncWithTracking(serverConfig conf
 }
 
 // cleanupJobFuncWithTracking performs database cleanup with job tracking
-func (serverHandler *ServerHandler) cleanupJobFuncWithTracking(db database.DBInterface, jobID ulid.ULID) {
+func (serverHandler *ServerHandler) cleanupJobFuncWithTracking(db database.Repository, jobID ulid.ULID) {
 	defer func() {
 		if r := recover(); r != nil {
 			Logger.Error("Panic recovered in cleanup job", "panic", r, "jobID", jobID)
@@ -440,7 +440,7 @@ func ingressCopyDocument(filePath string, serverConfig config.ServerConfig) erro
 }
 
 // ingressCleanup cleans up the ingress folder after we have handled the documents //TODO: Maybe ALSO preserve folder structure from ingress folder here as well?
-func ingressCleanup(fileName string, document database.Document, serverConfig config.ServerConfig, db database.DBInterface) error {
+func ingressCleanup(fileName string, document database.Document, serverConfig config.ServerConfig, db database.Repository) error {
 	if serverConfig.IngressDelete == true { //deleting the ingress files
 		err := os.Remove(fileName)
 		if err != nil {

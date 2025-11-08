@@ -13,12 +13,13 @@ import (
 
 	"github.com/drummonds/goEDMS/config"
 	"github.com/drummonds/goEDMS/database"
+	"github.com/drummonds/goEDMS/internal/build"
 	"github.com/labstack/echo/v4"
 )
 
 // ServerHandler will inject the variables needed into routes
 type ServerHandler struct {
-	DB           database.DBInterface
+	DB           database.Repository
 	Echo         *echo.Echo
 	ServerConfig config.ServerConfig
 }
@@ -275,7 +276,7 @@ func (serverHandler *ServerHandler) ReindexSearchDocuments(context echo.Context)
 
 	Logger.Info("Search reindex completed", "documents", count)
 	return context.JSON(http.StatusOK, map[string]interface{}{
-		"message":            "Search reindex completed successfully",
+		"message":             "Search reindex completed successfully",
 		"documents_reindexed": count,
 	})
 }
@@ -362,7 +363,7 @@ func convertDocumentsToFileTree(documents []database.Document) (fullFileTree *[]
 	return &fileTree, nil
 }
 
-func fileTree(rootPath string, db database.DBInterface) (fileTree *fullFileSystem, err error) {
+func fileTree(rootPath string, db database.Repository) (fileTree *fullFileSystem, err error) {
 	absRoot, err := filepath.Abs(rootPath)
 	if err != nil {
 		return nil, err
@@ -634,72 +635,24 @@ func (serverHandler *ServerHandler) CreateFolder(context echo.Context) error {
 // @Success 200 {object} map[string]interface{} "Application information"
 // @Router /about [get]
 func (serverHandler *ServerHandler) GetAboutInfo(c echo.Context) error {
-	// Get git commit hash
-	gitVersion := "f9d84497" // This should be set at build time via ldflags
 
 	// Determine OCR status
 	ocrConfigured := serverHandler.ServerConfig.TesseractPath != ""
 
 	// Get database type
 	dbType := serverHandler.ServerConfig.DatabaseType
-	if dbType == "" {
-		dbType = "postgres" // default
-	}
-
-	// Parse database connection string to extract details
-	connString := serverHandler.ServerConfig.DatabaseConnString
-	dbHost := ""
-	dbPort := ""
-	dbName := ""
-	isEphemeral := false
-
-	// Check if it's an empty connection string (indicates ephemeral database)
-	if connString == "" {
-		isEphemeral = true
-		dbHost = "ephemeral (temporary)"
-		dbPort = "N/A"
-		dbName = "temporary test database"
-	} else {
-		// Parse PostgreSQL connection string
-		// Format: "host=localhost port=5432 user=postgres password=postgres dbname=goedms sslmode=disable"
-		parts := strings.Split(connString, " ")
-		for _, part := range parts {
-			kv := strings.SplitN(part, "=", 2)
-			if len(kv) == 2 {
-				key := strings.TrimSpace(kv[0])
-				value := strings.TrimSpace(kv[1])
-				switch key {
-				case "host":
-					dbHost = value
-				case "port":
-					dbPort = value
-				case "dbname":
-					dbName = value
-				}
-			}
-		}
-
-		// If we couldn't parse values, provide defaults
-		if dbHost == "" {
-			dbHost = "localhost"
-		}
-		if dbPort == "" {
-			dbPort = "5432"
-		}
-		if dbName == "" {
-			dbName = "goedms"
-		}
-	}
+	dbHost := serverHandler.ServerConfig.DatabaseHost
+	dbPort := serverHandler.ServerConfig.DatabasePort
+	dbName := serverHandler.ServerConfig.DatabaseDbname
 
 	aboutInfo := map[string]interface{}{
-		"version":       gitVersion,
+		"version":       build.Version,
 		"ocrConfigured": ocrConfigured,
 		"ocrPath":       serverHandler.ServerConfig.TesseractPath,
 		"databaseType":  dbType,
 		"databaseHost":  dbHost,
 		"databasePort":  dbPort,
 		"databaseName":  dbName,
-		"isEphemeral":   isEphemeral,
 		"ingressPath":   serverHandler.ServerConfig.IngressPath,
 		"documentPath":  serverHandler.ServerConfig.DocumentPath,
 	}
