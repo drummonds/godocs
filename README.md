@@ -21,8 +21,9 @@ goEDMS is a self-hosted document management system designed for home users to sc
 - ✨ Go 1.22+ with structured logging (slog)
 - ✨ WebAssembly frontend using go-app (replaced React)
 - ✨ Pure Go image processing (removed ImageMagick dependency)
+- ✨ Pure Go PDF rendering option (no CGo required)
 - ✨ PostgreSQL full-text search with word cloud visualization
-- ✨ Step-based ingestion wiDeploy to gokrazy with local dbth comprehensive job tracking
+- ✨ Step-based ingestion with comprehensive job tracking
 - ✨ Database-stored configuration (removed TOML files)
 - ✨ Graceful OCR failure handling
 
@@ -273,7 +274,10 @@ On a representative sample of docs on my laptop is running an ingestion speed ab
 - **Frontend**: Go WebAssembly using [go-app](https://go-app.dev/) framework
 - **Database**: PostgreSQL with full-text search (tsvector)
 - **OCR**: Tesseract for image and scanned PDF processing
-- **PDF Processing**: Native Go libraries
+- **PDF Processing**: Dual renderer support
+  - **PDFium** (pure Go, default) - Uses WebAssembly, no CGo dependencies
+  - **Fitz** (optional) - CGo-based using MuPDF for faster performance
+  - See [docs/PDF_RENDERER.md](docs/PDF_RENDERER.md) for details
 - **Job Tracking**: ULID-based job system with real-time progress
 
 

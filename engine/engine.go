@@ -15,7 +15,7 @@ import (
 	"github.com/disintegration/imaging"
 	"github.com/drummonds/goEDMS/config"
 	"github.com/drummonds/goEDMS/database"
-	"github.com/gen2brain/go-fitz"
+	"github.com/drummonds/goEDMS/engine/pdfrenderer"
 	"github.com/ledongthuc/pdf"
 	"github.com/oklog/ulid/v2"
 )
@@ -521,29 +521,25 @@ func (serverHandler *ServerHandler) convertToImage(fileName string) (*string, er
 		return nil, err
 	}
 
-	// Open PDF document using go-fitz
-	doc, err := fitz.New(fileName)
+	// Create PDF renderer based on configuration
+	rendererType := pdfrenderer.RendererType(serverHandler.ServerConfig.PDFRenderer)
+	renderer, err := pdfrenderer.NewRenderer(rendererType)
 	if err != nil {
-		Logger.Error("Unable to open PDF document", "fileName", fileName, "error", err)
+		Logger.Error("Unable to create PDF renderer", "type", rendererType, "error", err)
 		return nil, err
 	}
-	defer doc.Close()
+	defer renderer.Close()
 
-	// Get number of pages
-	numPages := doc.NumPage()
-	Logger.Debug("PDF has pages", "count", numPages)
+	Logger.Debug("Using PDF renderer", "type", rendererType)
 
-	var images []image.Image
-
-	// Convert each page to image at 150 DPI
-	for pageNum := 0; pageNum < numPages; pageNum++ {
-		img, err := doc.Image(pageNum)
-		if err != nil {
-			Logger.Error("Unable to render page", "page", pageNum, "error", err)
-			continue
-		}
-		images = append(images, img)
+	// Render all pages of the PDF to images
+	images, err := renderer.RenderPDF(fileName)
+	if err != nil {
+		Logger.Error("Unable to render PDF pages", "fileName", fileName, "error", err)
+		return nil, err
 	}
+
+	Logger.Debug("PDF has pages", "count", len(images))
 
 	if len(images) == 0 {
 		err := fmt.Errorf("no pages could be rendered from PDF")

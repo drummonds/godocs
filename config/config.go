@@ -39,6 +39,7 @@ type ServerConfig struct {
 	ClientPassword       string
 	PushBulletToken      string `json:"-"`
 	TesseractPath        string
+	PDFRenderer          string // "fitz" (CGo) or "pdfium" (pure Go, default)
 	UseReverseProxy      bool
 	BaseURL              string
 	IngressInterval      int
@@ -176,6 +177,17 @@ func SetupServer() (ServerConfig, *slog.Logger) {
 		logger.Warn("Tesseract executable not found, OCR will be disabled", "path", tesseractPathConfig, "error", err)
 		serverConfigLive.TesseractPath = ""
 	}
+
+	// PDF Renderer configuration
+	// Options: "fitz" (CGo-based, requires MuPDF) or "pdfium" (pure Go, uses WebAssembly)
+	// Default to "pdfium" for easier deployment (no CGo dependencies)
+	pdfRendererType := getEnv("PDF_RENDERER", "pdfium")
+	if pdfRendererType != "fitz" && pdfRendererType != "pdfium" {
+		logger.Warn("Invalid PDF_RENDERER value, defaulting to pdfium", "value", pdfRendererType)
+		pdfRendererType = "pdfium"
+	}
+	serverConfigLive.PDFRenderer = pdfRendererType
+	logger.Info("PDF renderer configured", "type", pdfRendererType)
 
 	// Authentication configuration
 	serverConfigLive.WebUIPass = getEnvBool("WEB_UI_AUTH", false)
