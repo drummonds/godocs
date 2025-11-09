@@ -1,0 +1,644 @@
+basePath: /api
+definitions:
+  database.Document:
+    properties:
+      documentType:
+        description: type of document (pdf, txt, etc)
+        type: string
+      folder:
+        type: string
+      fullText:
+        type: string
+      hash:
+        type: string
+      ingressTime:
+        type: string
+      name:
+        type: string
+      path:
+        description: full path to the file
+        type: string
+      stormID:
+        description: ID field (kept as StormID for backward compatibility)
+        type: integer
+      ulid:
+        description: Have a smaller (than hash) id that can be used in URL's, hopefully
+          speed things up
+        items:
+          type: integer
+        type: array
+      url:
+        type: string
+    type: object
+  database.Job:
+    properties:
+      completedAt:
+        type: string
+      createdAt:
+        type: string
+      currentStep:
+        description: Human-readable current step
+        type: string
+      error:
+        description: Error message if failed
+        type: string
+      id:
+        items:
+          type: integer
+        type: array
+      message:
+        description: Status message
+        type: string
+      progress:
+        description: 0-100
+        type: integer
+      result:
+        description: JSON result data
+        type: string
+      startedAt:
+        type: string
+      status:
+        $ref: '#/definitions/database.JobStatus'
+      totalSteps:
+        description: Total number of steps
+        type: integer
+      type:
+        $ref: '#/definitions/database.JobType'
+      updatedAt:
+        type: string
+    type: object
+  database.JobStatus:
+    enum:
+    - pending
+    - running
+    - completed
+    - failed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - JobStatusPending
+    - JobStatusRunning
+    - JobStatusCompleted
+    - JobStatusFailed
+    - JobStatusCancelled
+  database.JobType:
+    enum:
+    - ingestion
+    - cleanup
+    - wordcloud
+    - search_reindex
+    type: string
+    x-enum-varnames:
+    - JobTypeIngestion
+    - JobTypeCleanup
+    - JobTypeWordCloud
+    - JobTypeSearchReindex
+  engine.fileTreeStruct:
+    properties:
+      childrenIDs:
+        items:
+          type: string
+        type: array
+      fileURL:
+        type: string
+      fullPath:
+        type: string
+      id:
+        type: string
+      isDir:
+        type: boolean
+      modDate:
+        type: string
+      name:
+        type: string
+      openable:
+        type: boolean
+      parentID:
+        type: string
+      size:
+        type: integer
+      ulid:
+        type: string
+    type: object
+  engine.fullFileSystem:
+    properties:
+      error:
+        type: string
+      fileSystem:
+        items:
+          $ref: '#/definitions/engine.fileTreeStruct'
+        type: array
+    type: object
+host: localhost:8000
+info:
+  contact:
+    name: API Support
+    url: https://github.com/drummonds/godocs
+  description: |-
+    Electronic Document Management System API - Backend service for document storage, search, and management
+    Supports document ingestion, full-text search, word cloud generation, and file system browsing
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: godocs Backend API
+  version: "1.0"
+paths:
+  /about:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve information about the application configuration, version,
+        and database
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Application information
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get application information
+      tags:
+      - Admin
+  /clean:
+    post:
+      consumes:
+      - application/json
+      description: Remove database entries for missing files and move orphaned files
+        to ingress
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Job created with jobId
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Clean database
+      tags:
+      - Admin
+  /document:
+    delete:
+      consumes:
+      - application/json
+      description: Deletes a document or folder from the system, including database
+        entry and physical file
+      parameters:
+      - description: Document ULID
+        in: query
+        name: id
+        type: string
+      - description: File path relative to document root
+        in: query
+        name: path
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Document Deleted" or "Folder Deleted
+          schema:
+            type: string
+        "404":
+          description: File not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Delete a file or folder
+      tags:
+      - Documents
+  /document/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve document details by ULID
+      parameters:
+      - description: Document ULID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Document details
+          schema:
+            $ref: '#/definitions/database.Document'
+        "404":
+          description: Document not found
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get a document by ID
+      tags:
+      - Documents
+  /document/move:
+    patch:
+      consumes:
+      - application/json
+      description: Move one or more documents to a different folder in the document
+        tree
+      parameters:
+      - description: Target folder path
+        in: query
+        name: folder
+        required: true
+        type: string
+      - collectionFormat: csv
+        description: Document ULID(s) to move
+        in: query
+        items:
+          type: string
+        name: id
+        required: true
+        type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Ok
+          schema:
+            type: string
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Move documents to a new folder
+      tags:
+      - Documents
+  /document/upload:
+    post:
+      consumes:
+      - multipart/form-data
+      description: Upload a new document file to the ingress folder for processing
+      parameters:
+      - description: Upload path (relative to ingress folder)
+        in: formData
+        name: path
+        type: string
+      - description: Document file to upload
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Path to uploaded file
+          schema:
+            type: string
+        "400":
+          description: Bad request
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Upload a document
+      tags:
+      - Documents
+  /documents/filesystem:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the complete document folder structure as a tree
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Complete filesystem tree
+          schema:
+            $ref: '#/definitions/engine.fullFileSystem'
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get document filesystem tree
+      tags:
+      - Documents
+  /documents/latest:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the most recently ingested documents with pagination
+      parameters:
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Paginated documents with metadata
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get latest documents
+      tags:
+      - Documents
+  /folder:
+    post:
+      consumes:
+      - application/json
+      description: Create a new folder in the document filesystem
+      parameters:
+      - description: Folder name
+        in: query
+        name: folder
+        required: true
+        type: string
+      - description: Parent path
+        in: query
+        name: path
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Full folder path created
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Create a new folder
+      tags:
+      - Folders
+  /folder/{folder}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all documents in a specific folder
+      parameters:
+      - description: Folder name
+        in: path
+        name: folder
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of documents in folder
+          schema:
+            items:
+              $ref: '#/definitions/database.Document'
+            type: array
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get folder contents
+      tags:
+      - Folders
+  /ingest:
+    post:
+      consumes:
+      - application/json
+      description: Manually trigger the document ingestion process to process files
+        in the ingress folder
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Job created with job ID
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Trigger document ingestion
+      tags:
+      - Admin
+  /jobs:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve a list of recent jobs with pagination
+      parameters:
+      - description: 'Number of jobs to return (default: 20)'
+        in: query
+        name: limit
+        type: integer
+      - description: 'Offset for pagination (default: 0)'
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of jobs
+          schema:
+            items:
+              $ref: '#/definitions/database.Job'
+            type: array
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get recent jobs
+      tags:
+      - Jobs
+  /jobs/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve details of a specific job by its ID
+      parameters:
+      - description: Job ID (ULID)
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Job details
+          schema:
+            $ref: '#/definitions/database.Job'
+        "400":
+          description: Invalid job ID
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Job not found
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get job by ID
+      tags:
+      - Jobs
+  /jobs/active:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve all jobs that are currently running or pending
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of active jobs
+          schema:
+            items:
+              $ref: '#/definitions/database.Job'
+            type: array
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get active jobs
+      tags:
+      - Jobs
+  /search:
+    get:
+      consumes:
+      - application/json
+      description: Search all documents using PostgreSQL full-text search
+      parameters:
+      - description: Search term
+        in: query
+        name: term
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Search results
+          schema:
+            $ref: '#/definitions/engine.fullFileSystem'
+        "204":
+          description: No results found
+        "404":
+          description: Empty search term
+          schema:
+            type: string
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Search documents
+      tags:
+      - Search
+  /search/reindex:
+    post:
+      consumes:
+      - application/json
+      description: Rebuild the full-text search index for all documents
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Reindex successful
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Reindex failed
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Reindex search documents
+      tags:
+      - Search
+  /wordcloud:
+    get:
+      consumes:
+      - application/json
+      description: Retrieve the top N most frequent words from all documents for word
+        cloud visualization
+      parameters:
+      - description: 'Maximum number of words to return (default: 100, max: 500)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Word cloud data with words, metadata, and count
+          schema:
+            additionalProperties: true
+            type: object
+        "500":
+          description: Internal server error
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get word cloud data
+      tags:
+      - WordCloud
+  /wordcloud/recalculate:
+    post:
+      consumes:
+      - application/json
+      description: Trigger a full recalculation of word frequencies from all documents
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Recalculation started
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Recalculate word cloud
+      tags:
+      - WordCloud
+schemes:
+- http
+- https
+swagger: "2.0"
+tags:
+- description: Document management operations
+  name: Documents
+- description: Full-text search and indexing operations
+  name: Search
+- description: Folder management operations
+  name: Folders
+- description: Administrative operations (ingestion, cleanup)
+  name: Admin
+- description: Word frequency analysis and word cloud generation
+  name: WordCloud
+- description: Service health check
+  name: Health

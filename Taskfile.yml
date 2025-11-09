@@ -1,0 +1,174 @@
+version: "3"
+
+vars:
+  BINARY_NAME: godocs
+  BUILD_DIR: ./build
+  FRONTEND_DIR: ./public
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  # Development tasks
+  dev:
+    desc: Run the application locally (backend only)
+    cmds:
+      - go run main.go
+
+  dev:full:
+    desc: Run the full application (rebuild WASM and start backend)
+    deps: [build:wasm]
+    cmds:
+      - echo "Starting backend with WASM frontend..."
+      - go run main.go
+
+  # Test tasks
+  test:
+    desc: Run all Go tests
+    cmds:
+      - go test -v ./...
+
+  test:coverage:
+    desc: Run tests with coverage report
+    cmds:
+      - go test -v -cover -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out -o coverage.html
+      - echo "Coverage report generated at coverage.html"
+
+  test:race:
+    desc: Run tests with race detector
+    cmds:
+      - go test -race -v ./...
+
+  # Build tasks
+  build:
+    desc: Build the application
+    deps: [build:wasm, openapi]
+    vars:
+      VERSION:
+        sh: git describe --tags --always 2>/dev/null || echo "dev"
+    cmds:
+      - "echo 'Building backend...'"
+      - mkdir -p {{.BUILD_DIR}}
+      - "go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags=\"-X 'main.Version={{.VERSION}}'\" main.go"
+      - "echo 'Build complete! Binary at {{.BUILD_DIR}}/{{.BINARY_NAME}} (version {{.VERSION}})'"
+
+  build:backend:
+    desc: Build only the backend
+    vars:
+      VERSION:
+        sh: git describe --tags --always 2>/dev/null || echo "dev"
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - "go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags=\"-X 'main.Version={{.VERSION}}'\" main.go"
+      - "echo 'Backend build complete! Version: {{.VERSION}}'"
+
+  build:wasm:
+    desc: Build the WebAssembly application
+    vars:
+      VERSION:
+        sh: git describe --tags --always 2>/dev/null || echo "dev"
+      BUILD_DATE:
+        sh: date -u +"%Y-%m-%d"
+    cmds:
+      - "echo 'Building WebAssembly application (version {{.VERSION}})...'"
+      - mkdir -p web
+      - mkdir -p public/built
+      - >-
+        GOOS=js GOARCH=wasm go build
+        -ldflags="-X 'github.com/drummonds/godocs/webapp.Version={{.VERSION}}'
+        -X 'github.com/drummonds/godocs/webapp.BuildDate={{.BUILD_DATE}}'"
+        -o web/app.wasm ./cmd/webapp
+      - "echo 'Copying wasm_exec.js to web/ and public/built/...'"
+      - "cp /usr/local/go/lib/wasm/wasm_exec.js web/wasm_exec.js || cp $(go env GOROOT)/misc/wasm/wasm_exec.js web/wasm_exec.js"
+      - cp web/wasm_exec.js public/built/wasm_exec.js
+      - "echo 'WebAssembly build complete! Version: {{.VERSION}}'"
+      - ls -lh web/
+      - ls -lh public/built/wasm_exec.js
+
+  # Cleanup tasks
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - rm -f coverage.out coverage.html
+      - echo "Cleaned build artifacts"
+
+  clean:all:
+    desc: Clean all generated files including WASM
+    cmds:
+      - task: clean
+      - rm -rf web/
+      - rm -f public/built/wasm_exec.js
+      - echo "Cleaned all generated files"
+
+  # Dependency management
+  deps:install:
+    desc: Install all dependencies (Go modules)
+    cmds:
+      - echo "Installing Go dependencies..."
+      - go mod download
+
+  deps:update:
+    desc: Update dependencies
+    cmds:
+      - echo "Updating Go dependencies..."
+      - go get -u ./...
+      - go mod tidy
+
+  deps:tidy:
+    desc: Tidy Go module dependencies
+    cmds:
+      - go mod tidy
+
+  # Code quality tasks
+  fmt:
+    desc: Format Go code
+    cmds:
+      - go fmt ./...
+
+  lint:
+    desc: Run Go linter (requires golangci-lint)
+    cmds:
+      - golangci-lint run ./...
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  # Documentation tasks
+  openapi:
+    desc: Generate OpenAPI specification from source code
+    cmds:
+      - echo "Generating OpenAPI spec from source annotations..."
+      - swag init -g cmd/backend/main.go -o ./docs --parseDependency --parseInternal
+      - cp docs/swagger.yaml docs/openapi.yaml
+      - echo "OpenAPI spec generated at docs/openapi.yaml and docs/swagger.yaml"
+
+  # Docker tasks
+  docker:build:
+    desc: Build Docker image
+    cmds:
+      - docker build -t godocs:latest .
+
+  docker:run:
+    desc: Run Docker container
+    cmds:
+      - docker run -p 8000:8000 godocs:latest
+
+  # Utility tasks
+  run:
+    desc: Build and run the application
+    cmds:
+      - task: build
+      - "{{.BUILD_DIR}}/{{.BINARY_NAME}}"
+
+  check:
+    desc: Run all checks (fmt, vet, test)
+    cmds:
+      - task: fmt
+      - task: vet
+      - task: test

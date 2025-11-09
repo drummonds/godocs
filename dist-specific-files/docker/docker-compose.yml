@@ -1,0 +1,18 @@
+version: "3"
+ 
+services:
+    godocs:
+      image: deranjer/godocs:latest
+      container_name: godocs
+      ports:
+        - 8000:8000
+      volumes:
+        - /sourcedir/documents:/opt/godocs/documents
+        - /sourcedir/done:/opt/godocs/done
+        - /sourcedir/tmp:/opt/godocs/temp
+        - /sourcedir/ingress:/opt/godocs/ingress
+        - /sourcedir/godocs.log:/opt/godocs/godocs.log
+        - /sourcedir/db:/opt/godocs/databases
+      environment:
+        - UID=UID
+        - GID=GID

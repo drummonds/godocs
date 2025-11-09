@@ -1,0 +1,251 @@
+title: godocs Document Ingestion and Storage Flow {
+  near: top-center
+  shape: text
+  style: {
+    font-size: 24
+    bold: true
+  }
+}
+
+# Document Sources
+sources: {
+  label: "Document Sources"
+  style.fill: "#e3f2fd"
+
+  ingress_folder: {
+    label: "Ingress Folder\n(Scheduled Scan)"
+    shape: stored_data
+    style.fill: "#90caf9"
+  }
+
+  web_upload: {
+    label: "Web Upload\n(User Triggered)"
+    shape: stored_data
+    style.fill: "#90caf9"
+  }
+}
+
+# Ingestion Entry Point
+ingestion: {
+  label: "Ingestion Engine"
+  style.fill: "#fff3e0"
+
+  file_detection: {
+    label: "File Type Detection"
+    shape: diamond
+    style.fill: "#ffb74d"
+  }
+}
+
+# Processing Pipeline
+processing: {
+  label: "Document Processing"
+  style.fill: "#f3e5f5"
+
+  pdf_proc: {
+    label: "PDF Processing"
+    shape: hexagon
+    style.fill: "#ce93d8"
+
+    pdf_text: {
+      label: "Extract Text\n(pdf library)"
+      shape: step
+    }
+
+    pdf_to_image: {
+      label: "Convert to Image\n(PDFium WASM)"
+      shape: step
+    }
+  }
+
+  ocr_proc: {
+    label: "OCR Processing\n(Tesseract)"
+    shape: hexagon
+    style.fill: "#ce93d8"
+  }
+
+  image_proc: {
+    label: "Image Processing\n(.tiff, .jpg, .png)"
+    shape: hexagon
+    style.fill: "#ce93d8"
+  }
+
+  text_proc: {
+    label: "Text/Doc Processing\n(.txt, .rtf, .doc)"
+    shape: hexagon
+    style.fill: "#ce93d8"
+  }
+}
+
+# Validation and Storage
+validation: {
+  label: "Validation & Storage"
+  style.fill: "#e8f5e9"
+
+  hash_calc: {
+    label: "Calculate Hash\n(SHA256)"
+    shape: step
+    style.fill: "#81c784"
+  }
+
+  duplicate_check: {
+    label: "Duplicate Check"
+    shape: diamond
+    style.fill: "#ffb74d"
+  }
+
+  ulid_gen: {
+    label: "Generate ULID\n(Unique ID)"
+    shape: step
+    style.fill: "#81c784"
+  }
+}
+
+# Storage Layer
+storage: {
+  label: "Storage Layer"
+  style.fill: "#fce4ec"
+
+  database: {
+    label: "PostgreSQL Database"
+    shape: cylinder
+    style.fill: "#f06292"
+
+    metadata: {
+      label: "• Name\n• Path\n• Hash\n• ULID\n• Folder\n• Full Text\n• Ingress Time\n• Document Type"
+      shape: text
+    }
+  }
+
+  filesystem: {
+    label: "Document Storage\n(File System)"
+    shape: cylinder
+    style.fill: "#f06292"
+  }
+
+  search_index: {
+    label: "Full-Text Search Index\n(tsvector)"
+    shape: cylinder
+    style.fill: "#f06292"
+  }
+}
+
+# Post-Processing
+post_processing: {
+  label: "Post-Processing"
+  style.fill: "#e0f2f1"
+
+  url_gen: {
+    label: "Generate Document URL\n(/document/view/{ULID})"
+    shape: step
+    style.fill: "#4db6ac"
+  }
+
+  route_reg: {
+    label: "Register Echo Route"
+    shape: step
+    style.fill: "#4db6ac"
+  }
+
+  file_move: {
+    label: "Move/Copy to Storage"
+    shape: step
+    style.fill: "#4db6ac"
+  }
+
+  cleanup: {
+    label: "Cleanup Ingress\n(Delete or Move)"
+    shape: step
+    style.fill: "#4db6ac"
+  }
+
+  wordcloud: {
+    label: "Update Word Cloud\n(Word Frequencies)"
+    shape: step
+    style.fill: "#4db6ac"
+  }
+}
+
+# Result
+result: {
+  label: "Result"
+  style.fill: "#e8eaf6"
+
+  success: {
+    label: "Document Available"
+    shape: page
+    style.fill: "#66bb6a"
+  }
+
+  error: {
+    label: "Processing Failed"
+    shape: page
+    style.fill: "#ef5350"
+  }
+}
+
+# Flow connections
+sources.ingress_folder -> ingestion.file_detection: "Scheduled scan"
+sources.web_upload -> ingestion.file_detection: "Manual upload"
+
+ingestion.file_detection -> processing.pdf_proc: ".pdf"
+ingestion.file_detection -> processing.image_proc: ".tiff, .jpg, .png"
+ingestion.file_detection -> processing.text_proc: ".txt, .rtf, .doc"
+ingestion.file_detection -> result.error: "Unsupported type" {
+  style.stroke-dash: 3
+}
+
+processing.pdf_proc.pdf_text -> validation.hash_calc: "Text extracted"
+processing.pdf_proc.pdf_text -> processing.pdf_proc.pdf_to_image: "Empty text" {
+  style.stroke-dash: 3
+}
+processing.pdf_proc.pdf_to_image -> processing.ocr_proc: "Image ready"
+
+processing.ocr_proc -> validation.hash_calc: "Text extracted"
+processing.image_proc -> processing.ocr_proc: "Send to OCR"
+processing.text_proc -> validation.hash_calc: "Text extracted"
+
+processing.ocr_proc -> result.error: "OCR failed" {
+  style.stroke-dash: 3
+}
+
+validation.hash_calc -> validation.duplicate_check
+validation.duplicate_check -> validation.ulid_gen: "Unique"
+validation.duplicate_check -> result.error: "Duplicate found" {
+  style.stroke-dash: 3
+}
+
+validation.ulid_gen -> storage.database
+validation.ulid_gen -> storage.filesystem
+storage.database -> storage.search_index: "Trigger\ninsert"
+
+storage.database -> post_processing.url_gen
+post_processing.url_gen -> post_processing.route_reg
+post_processing.route_reg -> post_processing.file_move
+post_processing.file_move -> post_processing.cleanup
+post_processing.cleanup -> post_processing.wordcloud
+post_processing.wordcloud -> result.success
+
+# Legend
+legend: {
+  label: "Legend"
+  near: bottom-right
+  style.fill: "#fafafa"
+
+  l1: {
+    label: "Processing Steps"
+    style.fill: "#ce93d8"
+  }
+  l2: {
+    label: "Storage Components"
+    style.fill: "#f06292"
+  }
+  l3: {
+    label: "Decision Points"
+    style.fill: "#ffb74d"
+  }
+  l4: {
+    label: "Success/Error"
+    style.fill: "#66bb6a"
+  }
+}

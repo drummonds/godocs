@@ -1,0 +1,33 @@
+﻿ingress
+godocsBuilds
+simpleEDMSIndex.bleve
+temp
+documents
+done
+public/node_modules
+public/dist
+dist
+public/built/frontend-config.*
+database.txt
+.devcontainer
+notes.txt
+databases
+staging
+
+# Development
+.vscode
+.claude
+.task
+
+# godocs bits
+godocs.log
+godocs.db.lock
+godocs.db
+test_output.log
+
+# Files for local testing
+.env
+demo
+test_godocs*
+
+node_modules

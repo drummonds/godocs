@@ -1,0 +1,13 @@
+[Unit]
+Description=godocs Server
+After=network.target
+
+[Service]
+Type=simple
+User=godocs
+WorkingDirectory=/opt/godocs
+ExecStart=/opt/godocs/godocs
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
