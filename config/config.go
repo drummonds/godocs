@@ -91,6 +91,8 @@ func SetupServer() (ServerConfig, *slog.Logger) {
 	frontEndConfigLive := FrontEndConfig{}
 
 	// Load .env file (silently ignore if doesn't exist)
+	// Try production location first, then local development files
+	_ = godotenv.Load("/etc/godocs.env")
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("config.env")
 
@@ -208,6 +210,8 @@ func SetupServer() (ServerConfig, *slog.Logger) {
 // SetupFrontend loads configuration for frontend-only server
 func SetupFrontend() (FrontEndConfig, *slog.Logger) {
 	// Load .env file (silently ignore if doesn't exist)
+	// Try production location first, then local development files
+	_ = godotenv.Load("/etc/godocs.env")
 	_ = godotenv.Load(".env")
 	_ = godotenv.Load("config.env")
 	_ = godotenv.Load("frontend.env")

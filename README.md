@@ -92,18 +92,24 @@ For production use with a persistent PostgreSQL database:
 
 3. **Copy and configure .env file**
    ```bash
+   # For production (recommended):
+   sudo cp .env.example /etc/godocs.env
+   sudo nano /etc/godocs.env
+
+   # For local development:
    cp .env.example .env
+   nano .env
    ```
 
-4. **Edit .env** with your database credentials:
+4. **Edit your configuration file** with your database credentials:
    ```bash
-   godocs_DATABASE_TYPE=postgres
-   godocs_DATABASE_HOST=localhost
-   godocs_DATABASE_PORT=5432
-   godocs_DATABASE_NAME=godocs
-   godocs_DATABASE_USER=godocs
-   godocs_DATABASE_PASSWORD=your_password
-   godocs_DATABASE_SSLMODE=dDeploy to gokrazy with local dbisable
+   GODOCS_DATABASE_TYPE=postgres
+   GODOCS_DATABASE_HOST=localhost
+   GODOCS_DATABASE_PORT=5432
+   GODOCS_DATABASE_NAME=godocs
+   GODOCS_DATABASE_USER=godocs
+   GODOCS_DATABASE_PASSWORD=your_password
+   GODOCS_DATABASE_SSLMODE=disable
    ```
 
 5. **Run godocs**
@@ -119,8 +125,10 @@ For production use with a persistent PostgreSQL database:
 
 Database connection settings are loaded in this order (later overrides earlier):
 
-1. `.env` file (if present)
-2. Environment variables (highest priority)
+1. `/etc/godocs.env` file (if present, production location)
+2. `.env` file (if present, local development)
+3. `config.env` file (if present, alternative local config)
+4. Environment variables (highest priority)
 
 ### Environment Variables
 
