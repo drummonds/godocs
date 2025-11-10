@@ -2,6 +2,10 @@
 
 All notable changes to godocs will be documented in this file.
 
+## 0.14.0 2025-11-10
+
+- Adding /etc/godocs.env as env 
+
 ## 0.12.0 2025-11-08
 
 - Converting to url github.com/drummonds/godocs as cache was corrupted
