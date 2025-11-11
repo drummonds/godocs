@@ -15,7 +15,7 @@ godocs is a self-hosted document management system designed for home users to sc
 - **Easy Setup**: Works out-of-the-box with ephemeral database for testing
 - **Pure Go**: No external dependencies except PostgreSQL and optional Tesseract OCR
 - **Modern Stack**: Go 1.22+, WebAssembly frontend, PostgreSQL full-text search
-- **Self-Contained**: WebAssembly frontend embedded in the binary
+- **Self-Contained**: Single binary with embedded static assets (WASM, CSS, JavaScript, favicon)
 
 ### Major Improvements in This Fork
 - ✨ Go 1.22+ with structured logging (slog)
@@ -52,9 +52,11 @@ godocs is a self-hosted document management system designed for home users to sc
 - [ ] Document archival system
 
 
-## ConfigurationDeploy to gokrazy with local db
+## Configuration
 
 godocs supports multiple ways to configure the application:
+
+**Note:** The godocs binary is self-contained with all static assets (WebAssembly, CSS, JavaScript) embedded. You only need the single binary and a configuration file (or environment variables) to run.
 
 ### 1. Development Mode (Ephemeral PostgreSQL)
 
@@ -294,11 +296,15 @@ godocs can be deployed to [gokrazy](https://gokrazy.org/), a pure Go appliance p
 
 **Note:** gokrazy has moved from `gokr-packer` to the new `gok` command. Use `gok` for all gokrazy operations.
 
+**Deployment is simple** - godocs is a single self-contained binary with all static assets (WebAssembly, CSS, JavaScript) embedded. You only need to:
+1. Add the godocs binary to your gokrazy instance
+2. Provide a configuration file at `/etc/godocs.env` or use environment variables
+
 **Adding godocs to a gokrazy instance:**
 
 ```bash
 # Add godocs to your gokrazy instance
-gok add github.com/drummonds/godocs@v0.12.1
+gok add github.com/drummonds/godocs@v0.13.0
 
 # Or use the latest version
 gok add github.com/drummonds/godocs@latest

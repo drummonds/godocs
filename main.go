@@ -1,7 +1,9 @@
 package main
 
 import (
+	"embed"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -15,6 +17,15 @@ import (
 	engine "github.com/drummonds/godocs/engine"
 	"github.com/drummonds/godocs/webapp"
 )
+
+//go:embed web/app.wasm web/wasm_exec.js
+var webFS embed.FS
+
+//go:embed webapp/webapp.css webapp/wordcloud.css
+var webappFS embed.FS
+
+//go:embed public/built/favicon.ico public/built/404.html
+var publicFS embed.FS
 
 // Logger is global since we will need it everywhere
 var Logger *slog.Logger
@@ -74,13 +85,13 @@ func main() {
 				return
 			}
 
-			// For non-API requests, serve custom 404 HTML
-			// If the 404.html file exists, serve it
-			if err := c.File("public/built/404.html"); err == nil {
+			// For non-API requests, serve custom 404 HTML from embedded filesystem
+			if data, err := publicFS.ReadFile("public/built/404.html"); err == nil {
+				c.HTMLBlob(http.StatusNotFound, data)
 				return
 			}
 
-			// Fallback: serve inline HTML if file doesn't exist
+			// Fallback: serve inline HTML if embedded file doesn't exist
 			c.HTML(http.StatusNotFound, `<!DOCTYPE html>
 <html>
 <head><title>404 - Not Found</title></head>
@@ -108,9 +119,13 @@ func main() {
 	Logger.Info("Setting up go-app WASM UI")
 	appHandler := webapp.Handler()
 
-	// Serve wasm_exec.js (go-app expects it here)
+	// Serve wasm_exec.js from embedded filesystem (go-app expects it here)
 	e.GET("/wasm_exec.js", func(c echo.Context) error {
-		return c.File("web/wasm_exec.js")
+		data, err := webFS.ReadFile("web/wasm_exec.js")
+		if err != nil {
+			return c.String(http.StatusNotFound, "wasm_exec.js not found")
+		}
+		return c.Blob(http.StatusOK, "application/javascript", data)
 	})
 
 	// Register go-app specific resources
@@ -118,11 +133,35 @@ func main() {
 	e.GET("/app.css", echo.WrapHandler(appHandler))
 	e.GET("/manifest.webmanifest", echo.WrapHandler(appHandler))
 
-	// Serve static assets
-	e.Static("/web", "web")
-	e.File("/webapp/webapp.css", "webapp/webapp.css")
-	e.File("/webapp/wordcloud.css", "webapp/wordcloud.css")
-	e.File("/favicon.ico", "public/built/favicon.ico")
+	// Serve static assets from embedded filesystem
+	webSubFS, _ := fs.Sub(webFS, "web")
+	e.GET("/web/*", echo.WrapHandler(http.StripPrefix("/web/", http.FileServer(http.FS(webSubFS)))))
+
+	// Serve CSS files from embedded filesystem
+	e.GET("/webapp/webapp.css", func(c echo.Context) error {
+		data, err := webappFS.ReadFile("webapp/webapp.css")
+		if err != nil {
+			return c.String(http.StatusNotFound, "webapp.css not found")
+		}
+		return c.Blob(http.StatusOK, "text/css", data)
+	})
+
+	e.GET("/webapp/wordcloud.css", func(c echo.Context) error {
+		data, err := webappFS.ReadFile("webapp/wordcloud.css")
+		if err != nil {
+			return c.String(http.StatusNotFound, "wordcloud.css not found")
+		}
+		return c.Blob(http.StatusOK, "text/css", data)
+	})
+
+	// Serve favicon from embedded filesystem
+	e.GET("/favicon.ico", func(c echo.Context) error {
+		data, err := publicFS.ReadFile("public/built/favicon.ico")
+		if err != nil {
+			return c.String(http.StatusNotFound, "favicon.ico not found")
+		}
+		return c.Blob(http.StatusOK, "image/x-icon", data)
+	})
 
 	// Inject backend API URL into the page
 	e.GET("/config.js", func(c echo.Context) error {
