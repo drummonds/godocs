@@ -2,6 +2,10 @@
 
 All notable changes to godocs will be documented in this file.
 
+## 0.16.0 2025-11-11
+
+- Adding make ingress directory if it doesn't exist
+
 ## 0.15.0 2025-11-10
 
 - Embedding static files into binary for single-file deployment
