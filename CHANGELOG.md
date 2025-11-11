@@ -2,6 +2,10 @@
 
 All notable changes to godocs will be documented in this file.
 
+## 0.15.0 2025-11-10
+
+- embedding static files 
+
 ## 0.14.0 2025-11-10
 
 - Adding /etc/godocs.env as env 
