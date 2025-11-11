@@ -4,7 +4,9 @@ All notable changes to godocs will be documented in this file.
 
 ## 0.15.0 2025-11-10
 
-- embedding static files 
+- Embedding static files into binary for single-file deployment
+- Log version on startup
+- Fixed build scripts to properly set version using internal/build.Version 
 
 ## 0.14.0 2025-11-10
 

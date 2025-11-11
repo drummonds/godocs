@@ -52,7 +52,7 @@ tasks:
     cmds:
       - "echo 'Building backend...'"
       - mkdir -p {{.BUILD_DIR}}
-      - "go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags=\"-X 'main.Version={{.VERSION}}'\" main.go"
+      - "go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags=\"-X 'github.com/drummonds/godocs/internal/build.Version={{.VERSION}}'\" main.go"
       - "echo 'Build complete! Binary at {{.BUILD_DIR}}/{{.BINARY_NAME}} (version {{.VERSION}})'"
 
   build:backend:
@@ -62,7 +62,7 @@ tasks:
         sh: git describe --tags --always 2>/dev/null || echo "dev"
     cmds:
       - mkdir -p {{.BUILD_DIR}}
-      - "go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags=\"-X 'main.Version={{.VERSION}}'\" main.go"
+      - "go build -o {{.BUILD_DIR}}/{{.BINARY_NAME}} -ldflags=\"-X 'github.com/drummonds/godocs/internal/build.Version={{.VERSION}}'\" main.go"
       - "echo 'Backend build complete! Version: {{.VERSION}}'"
 
   build:wasm:

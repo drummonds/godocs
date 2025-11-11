@@ -15,6 +15,7 @@ import (
 	config "github.com/drummonds/godocs/config"
 	database "github.com/drummonds/godocs/database"
 	engine "github.com/drummonds/godocs/engine"
+	"github.com/drummonds/godocs/internal/build"
 	"github.com/drummonds/godocs/webapp"
 )
 
@@ -41,6 +42,10 @@ func injectGlobals(logger *slog.Logger) {
 func main() {
 	serverConfig, logger := config.SetupServer()
 	injectGlobals(logger) //inject the logger into all of the packages
+
+	// Log version information
+	logger.Info("Starting godocs", "version", build.Version)
+	fmt.Printf("\n🚀  godocs version %s\n", build.Version)
 
 	// Show info banner if using ephemeral database
 	if serverConfig.DatabaseType == "ephemeral" {
